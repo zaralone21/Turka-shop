@@ -1,8 +1,11 @@
 import { Repo } from '../../core/repo.js';
 import { Schema } from '../../core/schema.js';
-import { byText, daysFromToday, esc, fmtDate, plural } from '../../core/utils.js';
+import { byText, daysFromToday, esc, fmtDate, fmtKyiv, fmtMoney, plural } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, ext, igLink, statusPill } from '../shared.js';
 import { productTable } from './products.js';
+import { purchasePill } from './purchases.js';
+import { Calc } from '../../core/calc.js';
+import { fireAt } from '../../core/reminders.js';
 
 /* ---------- 2. Постачальники ---------- */
 VIEWS.suppliers = () => {
@@ -30,7 +33,8 @@ export function supplierCard(s) {
   </article>`;
 }
 export function supplierDetail(s) {
-  const { products, notes } = Repo.linkedToSupplier(s.id);
+  const { products, notes, purchases } = Repo.linkedToSupplier(s.id);
+  const rems = D().reminders.filter(r => r.status !== 'done' && r.link && r.link.type === 'supplier' && r.link.id === s.id);
   const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
   return `
   <div><button class="btn ghost sm" data-act="back-suppliers">← Усі постачальники</button></div>
@@ -54,5 +58,13 @@ export function supplierDetail(s) {
   <section class="panel">
     <div class="panel-head"><h2>Нотатки про постачальника (${notes.length})</h2><button class="btn sm" data-act="add-note" data-supplier="${s.id}">+ Нотатка</button></div>
     ${notes.length ? `<div class="list">${notes.map(n => `<div class="li"><div class="t"><b>${esc(n.title || 'Без заголовка')}</b><div class="small muted clamp" style="-webkit-line-clamp:2">${esc(n.body)}</div></div><button class="btn sm" data-act="edit-note" data-id="${n.id}">Відкрити</button></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Нотаток поки немає.</p>'}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Закупівлі (${purchases.length})</h2><button class="btn sm" data-act="add-purchase" data-supplier="${s.id}">+ Закупівля</button></div>
+    ${purchases.length ? `<div class="list">${purchases.map(p => `<div class="li"><button class="li-btn" data-act="edit-purchase" data-id="${p.id}"><span class="nm">${esc(p.title)}</span><div class="small muted">${p.expectedDate ? 'очікується ' + fmtDate(p.expectedDate) : 'дата не вказана'}</div></button><span class="num small" style="text-align:right">${fmtMoney(Calc.purchaseTotal(p).total)}<br>${purchasePill(p.status)}</span></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Закупівель у цього постачальника ще немає.</p>'}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Нагадування (${rems.length})</h2><button class="btn sm" data-act="add-reminder" data-supplier="${s.id}">+ Нагадування</button></div>
+    ${rems.length ? `<div class="list">${rems.map(r => `<div class="li"><button class="li-btn" data-act="edit-reminder" data-id="${r.id}"><span class="nm">${esc(r.title)}</span><div class="small muted">${fmtKyiv(fireAt(r))}</div></button></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Активних нагадувань немає.</p>'}
   </section>`;
 }

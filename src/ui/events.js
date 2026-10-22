@@ -1,4 +1,7 @@
+import { Cloud, localLegacyData } from '../core/cloud.js';
 import { Demo } from '../core/demo.js';
+import { renderAuth } from './auth.js';
+import { clearLegacy, migrationDialog, openData } from './session.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
@@ -17,8 +20,8 @@ export const ACTIONS = {
   'fab': () => { const a = FAB_ACTION[UI.page]; if (a) ACTIONS[a]({ dataset: {} }); else quickAddSheet(); },
   'quick-add': () => quickAddSheet(),
   'go-budget': () => go('budget'),
-  'add-purchase': () => purchaseForm(), 'edit-purchase': el => purchaseForm(el.dataset.id), 'purchase-to-budget': el => purchaseToBudget(el.dataset.id),
-  'add-reminder': () => reminderForm(), 'edit-reminder': el => reminderForm(el.dataset.id),
+  'add-purchase': el => purchaseForm(null, { supplierId: el.dataset.supplier || '' }), 'edit-purchase': el => purchaseForm(el.dataset.id), 'purchase-to-budget': el => purchaseToBudget(el.dataset.id),
+  'add-reminder': el => reminderForm(null, el.dataset.supplier ? { link: { type: 'supplier', id: el.dataset.supplier } } : {}), 'edit-reminder': el => reminderForm(el.dataset.id),
   'rem-done': el => reminderDone(el.dataset.id), 'rem-snooze': el => snoozeSheet(el.dataset.id),
   'notif-open': () => openNotifCenter(),
   'ai-open': () => AI.open(), 'ai-close': () => AI.close(),
@@ -43,8 +46,14 @@ export const ACTIONS = {
   'be-clear': async () => { await Repo.setSettings({ breakeven: { fixed: '', margin: '', extra: '', avgCheck: '', days: '26' } }); },
   'export': () => exportJSON(), 'export-copy': () => showJSON(JSON.stringify(Repo.exportObject(), null, 2)),
   'copy': el => copyText(el.dataset.text),
-  'demo-enter': async () => { try { localStorage.setItem(KEYS.mode, 'demo'); } catch {} await Repo.open('demo'); go('home'); toast('Відкрито демо-режим'); },
-  'demo-exit': async () => { try { localStorage.removeItem(KEYS.mode); } catch {} await Repo.open('real'); go('home'); toast('Повернулися до ваших даних'); },
+  'demo-enter': async () => { try { localStorage.setItem(KEYS.mode, 'demo'); } catch {} await openData(); go('home'); toast('Відкрито демо-режим'); },
+  'demo-exit': async () => { try { localStorage.removeItem(KEYS.mode); } catch {} await openData(); if (Repo.data) go('home'); toast('Повернулися до ваших даних'); },
+  'sign-out': async () => { if (await confirmDialog({ title: 'Вийти з облікового запису?', ok: 'Вийти', danger: false, text: '<p style="margin:0">Дані залишаться на сервері. Щоб побачити їх знову, увійдіть.</p>' })) await Cloud.signOut(); },
+  'resync': async () => { await Repo.resync(); toast(Repo.status.sync === 'ok' ? 'Синхронізовано' : 'Немає зв’язку з сервером', Repo.status.sync === 'ok' ? null : 'error'); },
+  'change-password': () => renderAuth('newpass'),
+  'migrate-open': () => migrationDialog(),
+  'legacy-backup': () => { const l = localLegacyData(); if (l) exportJSON(l, '-browser'); },
+  'legacy-clear': () => clearLegacy(),
   'demo-reset': async () => { if (await confirmDialog({ title: 'Скинути демо-дані?', ok: 'Скинути', text: '<p style="margin:0">Демо-набір буде створено заново. Ваші власні дані це не зачепить.</p>' })) { await Repo.replaceAll(Demo.build()); toast('Демо-дані скинуто'); } },
   'reset-all': async () => { if (await confirmDialog({ title: 'Видалити всі дані?', ok: 'Видалити все', text: `<p style="margin:0">Усі ${Repo.status.demo ? 'демо-' : ''}записи в цьому браузері буде видалено назавжди.</p><div class="callout warn">Якщо дані потрібні, спершу зробіть експорт у JSON.</div>` })) { await Repo.reset(); toast('Дані видалено'); } },
 };
