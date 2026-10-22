@@ -367,3 +367,14 @@ table.t .acts { white-space: nowrap; text-align: right; }
   .stat .v { font-size: 1rem; }
 }
 @media (max-width: 600px) { .li.rem { flex-wrap: wrap; } .li.rem > .row { width: 100%; } }
+.msg .plan { margin: 8px 0 0; padding-left: 18px; }
+.msg .plan li { margin: 3px 0; }
+.msg .diff { margin: 2px 0 4px; padding-left: 16px; font-size: .88rem; color: var(--muted); }
+.msg .diff b { color: var(--fg); }
+.msg.confirm { border-color: var(--accent); }
+.rec-link { font-weight: 600; text-align: left; white-space: normal; }
+.rec-missing { text-decoration: underline dotted; }
+.ai-chats { align-self: start; }
+.ai-layout .chat { height: calc(100dvh - 190px); min-height: 420px; }
+@media (max-width: 600px) { .ai-layout .chat { height: calc(100dvh - 290px); min-height: 360px; } }
+.drawer-h .row { flex-wrap: nowrap; }

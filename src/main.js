@@ -18,6 +18,7 @@ import './ui/views/reminders.js';
 import './ui/ai.js';
 import './ui/events.js';
 import { initNotifications } from './ui/notifications.js';
+import { AI } from './ui/ai.js';
 
 /* Запуск застосунку. */
 Repo.onChange(render);
@@ -29,16 +30,16 @@ document.documentElement.lang = 'uk';
     let opened = false;
     Cloud.onAuthChange(async event => {
       if (event === 'PASSWORD_RECOVERY') { renderAuth('newpass'); return; }
-      if (event === 'SIGNED_IN' && !opened) { opened = true; await openData(); initNotifications(); }
-      if (event === 'SIGNED_OUT') { opened = false; renderAuth(); }
+      if (event === 'SIGNED_IN' && !opened) { opened = true; await openData(); initNotifications(); AI.refreshStatus(true); }
+      if (event === 'SIGNED_OUT') { opened = false; AI.refreshStatus(true); renderAuth(); }
     });
     await Cloud.currentSession();
-    if (Cloud.user && !opened) { opened = true; await openData(); initNotifications(); }
+    if (Cloud.user && !opened) { opened = true; await openData(); initNotifications(); AI.refreshStatus(true); }
     else if (!Cloud.user) renderAuth();
     const resync = () => { if (Cloud.user && Repo.status.cloud) Repo.resync(); };
     window.addEventListener('online', resync);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resync(); });
   } else {
-    await openData(); initNotifications();
+    await openData(); initNotifications(); AI.refreshStatus(true);
   }
 })();

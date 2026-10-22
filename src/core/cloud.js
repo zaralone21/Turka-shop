@@ -17,7 +17,7 @@ const cacheFor = userId => ({
 
 export const Cloud = {
   configured: !!(URL_ && KEY_),
-  url: URL_,
+  url: URL_, anonKey: KEY_,
   client: null, user: null, session: null, channel: null, pendingMigration: false,
   init() {
     if (!this.configured || this.client) return this.client;

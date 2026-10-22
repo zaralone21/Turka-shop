@@ -67,6 +67,7 @@ export function sheet(title, items) {
 }
 export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => [id, id, pageTitle(id), () => go(id)])); }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()]]); }
+Object.assign(ACTIONS, AI.actions); AI.go = go; AI.bindRender(render);
 document.addEventListener('click', e => {
   const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else go(tab.dataset.tab); return; }
   const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { go(nav.dataset.nav); return; }
@@ -97,6 +98,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('submit', async e => {
   const f = e.target;
+  if (f.dataset.form === 'ai-chat') { e.preventDefault(); AI.submit(f.q.value); return; }
   if (f.dataset.form === 'ai-ask') { e.preventDefault(); const q = f.q.value.trim(); if (q) AI.ask(q); return; }
   if (f.dataset.form !== 'total-budget') return; e.preventDefault();
   const n = parseNum(f.total.value);
