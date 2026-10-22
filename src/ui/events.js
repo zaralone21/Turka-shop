@@ -7,7 +7,7 @@ import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
 import { budgetCatsModal, deleteSupplier, expenseForm, noteForm, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { AI } from './ai.js';
-import { openNotifCenter } from './notifications.js';
+import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
 import { D, PAGES, UI, pageTitle, toast } from './shared.js';
 import { FAB_ACTION, MORE_PAGES, render, svg } from './shell.js';
@@ -67,7 +67,7 @@ export function sheet(title, items) {
 }
 export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => [id, id, pageTitle(id), () => go(id)])); }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()]]); }
-Object.assign(ACTIONS, AI.actions); AI.go = go; AI.bindRender(render);
+Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
 document.addEventListener('click', e => {
   const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else go(tab.dataset.tab); return; }
   const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { go(nav.dataset.nav); return; }
@@ -75,7 +75,10 @@ document.addEventListener('click', e => {
   const a = el.dataset.act; if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'file') return;
   if (ACTIONS[a]) { e.preventDefault(); ACTIONS[a](el); }
 });
-document.addEventListener('click', e => { const b = e.target.closest('[data-n-done]'); if (b) { closeModal(); reminderDone(b.dataset.nDone); } });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-n-done]'); if (b) { closeModal(); reminderDone(b.dataset.nDone); return; }
+  const s = e.target.closest('[data-n-snooze]'); if (s) { closeModal(); snoozeSheet(s.dataset.nSnooze); }
+});
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalEl) closeModal();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[data-act]')) { e.preventDefault(); ACTIONS[e.target.dataset.act](e.target); }

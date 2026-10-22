@@ -7,9 +7,11 @@ DB="turka_test_$$"
 psql "$PGURL" -qc "create database $DB" >/dev/null
 trap 'psql "$PGURL" -qc "drop database if exists $DB" >/dev/null' EXIT
 URL="${PGURL%/*}/$DB"
+# Міграції з pg_cron і Vault потребують Supabase; тут перевіряємо таблиці, правила доступу й захист від дублів.
+MIGRATIONS=$(ls supabase/migrations/*.sql | grep -v reminder_cron)
 psql "$URL" -q -v ON_ERROR_STOP=1 -f tests/sql/supabase_shim.sql
-for f in supabase/migrations/*.sql; do psql "$URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
+for f in $MIGRATIONS; do psql "$URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
 # Міграції мають бути повторюваними
-for f in supabase/migrations/*.sql; do psql "$URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
+for f in $MIGRATIONS; do psql "$URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
 psql "$URL" -v ON_ERROR_STOP=1 -f tests/sql/rls_test.sql
 echo "SQL-тести пройдено"
