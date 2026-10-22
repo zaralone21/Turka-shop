@@ -33,7 +33,8 @@ export const Cloud = {
   },
   async resetPassword(email) { const { error } = await this.client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname + '#reset' }); if (error) throw error; },
   async updatePassword(password) { const { error } = await this.client.auth.updateUser({ password }); if (error) throw error; },
-  async signOut() { this.unsubscribe(); await this.client.auth.signOut(); },
+  /** Вихід. Локальна копія даних очищається, якщо на ній немає ненадісланих змін. */
+  async signOut({ keepCache = false } = {}) { const id = this.user?.id; this.unsubscribe(); if (id && !keepCache) try { localStorage.removeItem(KEYS.cloudCache + id); } catch {} await this.client.auth.signOut(); },
   adapter() { return createCloudAdapter({ client: this.client, userId: this.user.id, cache: cacheFor(this.user.id) }); },
   /** Слухає зміни своїх записів з інших пристроїв. */
   subscribe(repo) {

@@ -48,7 +48,11 @@ export const ACTIONS = {
   'copy': el => copyText(el.dataset.text),
   'demo-enter': async () => { try { localStorage.setItem(KEYS.mode, 'demo'); } catch {} await openData(); go('home'); toast('Відкрито демо-режим'); },
   'demo-exit': async () => { try { localStorage.removeItem(KEYS.mode); } catch {} await openData(); if (Repo.data) go('home'); toast('Повернулися до ваших даних'); },
-  'sign-out': async () => { if (await confirmDialog({ title: 'Вийти з облікового запису?', ok: 'Вийти', danger: false, text: '<p style="margin:0">Дані залишаться на сервері. Щоб побачити їх знову, увійдіть.</p>' })) await Cloud.signOut(); },
+  'sign-out': async () => {
+    const pending = Repo.adapter?.hasPending?.(Repo.data);
+    if (!await confirmDialog({ title: 'Вийти з облікового запису?', ok: 'Вийти', danger: !!pending, text: pending ? '<div class="callout warn">Частина змін ще не надіслана на сервер. Якщо вийти зараз, вони залишаться лише на цьому пристрої й з’являться після наступного входу.</div>' : '<p style="margin:0">Дані залишаться на сервері. Копія на цьому пристрої буде очищена.</p>' })) return;
+    await Cloud.signOut({ keepCache: !!pending });
+  },
   'resync': async () => { await Repo.resync(); toast(Repo.status.sync === 'ok' ? 'Синхронізовано' : 'Немає зв’язку з сервером', Repo.status.sync === 'ok' ? null : 'error'); },
   'change-password': () => renderAuth('newpass'),
   'migrate-open': () => migrationDialog(),
