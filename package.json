@@ -1,0 +1,18 @@
+{
+  "name": "turka-shop",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Дашборд підготовки до відкриття магазину білизни, шкарпеток і домашніх тапок",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "vite-plugin-singlefile": "^2.2.0",
+    "vitest": "^3.2.4"
+  }
+}
