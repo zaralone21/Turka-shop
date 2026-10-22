@@ -38,17 +38,20 @@ export const Repo = (() => {
     get data() { return data; },
     list: col,
     get: (name, id) => data[name].find(x => x.id === id) || null,
-    async create(name, fields) { const t = nowISO(); const rec = { ...fields, id: uid(), createdAt: t, updatedAt: t }; await mutate(d => d[name].push(rec)); return rec; },
-    async update(name, id, fields) { await mutate(d => { const r = d[name].find(x => x.id === id); if (r) Object.assign(r, fields, { updatedAt: nowISO() }); }); },
+    async create(name, fields) { const t = nowISO(); const rec = Schema.normalizeRecord(name, { ...fields, id: fields.id || uid(), createdAt: t, updatedAt: t }); await mutate(d => d[name].push(rec)); return rec; },
+    async update(name, id, fields) { await mutate(d => { const i = d[name].findIndex(x => x.id === id); if (i >= 0) d[name][i] = Schema.normalizeRecord(name, { ...d[name][i], ...fields, updatedAt: nowISO() }); }); },
+    /** Повертає запис до попереднього стану (для «Скасувати»). Якщо prev = null — видаляє створений запис. */
+    async restore(name, id, prev) { await mutate(d => { d[name] = d[name].filter(x => x.id !== id); if (prev) d[name].push(Schema.normalizeRecord(name, { ...prev, updatedAt: nowISO() })); }); },
     async remove(name, id) { await mutate(d => { d[name] = d[name].filter(x => x.id !== id); }); },
     /** Видаляє постачальника. Пов'язані товари й нотатки залишаються, лише відв'язуються. */
     async removeSupplier(id) {
       await mutate(d => {
         d.suppliers = d.suppliers.filter(s => s.id !== id);
-        [...d.products, ...d.notes].forEach(r => { if (r.supplierId === id) { r.supplierId = null; r.updatedAt = nowISO(); } });
+        [...d.products, ...d.notes, ...d.purchases].forEach(r => { if (r.supplierId === id) { r.supplierId = null; r.updatedAt = nowISO(); } });
+        d.reminders.forEach(r => { if (r.link && r.link.type === 'supplier' && r.link.id === id) { r.link = null; r.updatedAt = nowISO(); } });
       });
     },
-    linkedToSupplier: id => ({ products: data.products.filter(p => p.supplierId === id), notes: data.notes.filter(n => n.supplierId === id) }),
+    linkedToSupplier: id => ({ products: data.products.filter(p => p.supplierId === id), notes: data.notes.filter(n => n.supplierId === id), purchases: data.purchases.filter(p => p.supplierId === id) }),
     async setSettings(patch) { await mutate(d => Object.assign(d.settings, patch)); },
     async addBudgetCategory(name) { const c = { id: 'c-' + uid().slice(0, 8), name, builtin: false, refundable: false }; await mutate(d => d.settings.budgetCategories.push(c)); return c; },
     async renameBudgetCategory(id, name) { await mutate(d => { const c = d.settings.budgetCategories.find(x => x.id === id); if (c && !c.builtin) c.name = name; }); },

@@ -12,6 +12,9 @@ import './ui/views/planner.js';
 import './ui/views/budget.js';
 import './ui/views/breakeven.js';
 import './ui/views/data.js';
+import './ui/views/purchases.js';
+import './ui/views/reminders.js';
+import './ui/ai.js';
 import './ui/events.js';
 
 /* =====================================================================

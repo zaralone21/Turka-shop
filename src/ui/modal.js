@@ -7,10 +7,10 @@ import { svg } from './shell.js';
    ===================================================================== */
 export let modalEl = null, lastFocus = null;
 export function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); } }
-export function openModal({ title, body, foot, narrow, onMount }) {
+export function openModal({ title, body, foot, narrow, wide, onMount }) {
   closeModal(); lastFocus = document.activeElement;
   modalEl = document.createElement('div'); modalEl.className = 'modal-back';
-  modalEl.innerHTML = `<div class="modal ${narrow ? 'narrow' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-h"><h2>${esc(title)}</h2><button class="btn ghost icon" data-close aria-label="Закрити">✕</button></div>${body}${foot || ''}</div>`;
+  modalEl.innerHTML = `<div class="modal ${narrow ? 'narrow' : wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-h"><h2>${esc(title)}</h2><button class="btn ghost icon" data-close aria-label="Закрити">✕</button></div>${body}${foot || ''}</div>`;
   modalEl.addEventListener('mousedown', e => { if (e.target === modalEl) closeModal(); });
   modalEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModal(); });
   document.body.appendChild(modalEl);
@@ -36,8 +36,8 @@ export const F = {
 export const supplierOptions = () => [['', '— не вказано —'], ...[...D().suppliers].sort((a, b) => byText(a.name, b.name)).map(s => [s.id, s.name])];
 
 /** Загальна форма: build → html полів; read(fd, form) → {errors, values}; save(values). */
-export function formModal({ title, fields, read, save, onMount, onDelete, submitLabel = 'Зберегти' }) {
-  openModal({ title, body: `<form class="modal-b" id="modal-form" novalidate><div class="form-error" hidden></div><div class="form-grid">${fields}</div></form>`,
+export function formModal({ title, fields, read, save, onMount, onDelete, wide, submitLabel = 'Зберегти' }) {
+  openModal({ title, wide, body: `<form class="modal-b" id="modal-form" novalidate><div class="form-error" hidden></div><div class="form-grid">${fields}</div></form>`,
     foot: `<div class="modal-f">${onDelete ? '<button class="btn danger" type="button" data-del style="margin-right:auto">Видалити</button>' : ''}<button class="btn" type="button" data-close>Скасувати</button><button class="btn primary" type="submit" form="modal-form">${submitLabel}</button></div>`,
     onMount: m => {
       const form = m.querySelector('form');

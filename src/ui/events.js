@@ -2,17 +2,26 @@ import { Demo } from '../core/demo.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
-import { budgetCatsModal, deleteSupplier, expenseForm, noteForm, productForm, supplierForm, taskForm } from './forms.js';
+import { budgetCatsModal, deleteSupplier, expenseForm, noteForm, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { AI } from './ai.js';
+import { openNotifCenter } from './notifications.js';
 import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
-import { D, PAGES, UI, toast } from './shared.js';
-import { FAB_ACTION, render, svg } from './shell.js';
+import { D, PAGES, UI, pageTitle, toast } from './shared.js';
+import { FAB_ACTION, MORE_PAGES, render, svg } from './shell.js';
 
 /* =====================================================================
    8. ОБРОБКА ПОДІЙ (делегування)
    ===================================================================== */
-export function go(page) { UI.page = page; if (page !== 'suppliers') UI.supplierId = null; UI.keepScroll = false; render(); window.scrollTo(0, 0); }
+export function go(page) { UI.page = page; UI.aiOpen = false; if (page !== 'suppliers') UI.supplierId = null; UI.keepScroll = false; closeModal(); render(); window.scrollTo(0, 0); try { history.replaceState(null, '', '#' + page); } catch {} }
 export const ACTIONS = {
-  'fab': () => { const a = FAB_ACTION[UI.page]; if (a) ACTIONS[a]({ dataset: UI.page === 'products' && UI.supplierId ? { supplier: UI.supplierId } : {} }); else quickAddSheet(); },
+  'fab': () => { const a = FAB_ACTION[UI.page]; if (a) ACTIONS[a]({ dataset: {} }); else quickAddSheet(); },
+  'quick-add': () => quickAddSheet(),
+  'go-budget': () => go('budget'),
+  'add-purchase': () => purchaseForm(), 'edit-purchase': el => purchaseForm(el.dataset.id), 'purchase-to-budget': el => purchaseToBudget(el.dataset.id),
+  'add-reminder': () => reminderForm(), 'edit-reminder': el => reminderForm(el.dataset.id),
+  'rem-done': el => reminderDone(el.dataset.id), 'rem-snooze': el => snoozeSheet(el.dataset.id),
+  'notif-open': () => openNotifCenter(),
+  'ai-open': () => AI.open(), 'ai-close': () => AI.close(),
   'task-toggle': async el => { const t = Repo.get('tasks', el.dataset.id); const done = t.status !== 'done'; await Repo.update('tasks', t.id, { status: done ? 'done' : 'planned' }); toast(done ? 'Завдання виконано' : 'Завдання повернуто в роботу'); },
   'add-supplier': () => supplierForm(), 'edit-supplier': el => supplierForm(el.dataset.id), 'del-supplier': el => deleteSupplier(el.dataset.id),
   'open-supplier': el => { UI.supplierId = el.dataset.id; go('suppliers'); UI.supplierId = el.dataset.id; render(); },
@@ -43,8 +52,8 @@ export function sheet(title, items) {
   openModal({ title, narrow: true, body: `<div class="modal-b"><div class="sheet-list">${items.map(([key, icon, label], i) => `<button class="btn" data-sheet="${i}">${svg(icon)}${label}</button>`).join('')}</div></div>`,
     onMount: m => m.querySelectorAll('[data-sheet]').forEach(b => b.onclick = () => { closeModal(); items[+b.dataset.sheet][3](); }) });
 }
-export function moreSheet() { sheet('Ще', [['notes', 'notes', 'Нотатки', () => go('notes')], ['budget', 'budget', 'Бюджет відкриття', () => go('budget')], ['breakeven', 'breakeven', 'Беззбитковість', () => go('breakeven')], ['data', 'data', 'Дані та резервна копія', () => go('data')]]); }
-export function quickAddSheet() { sheet('Швидко додати', [[0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'task', 'Завдання', () => taskForm()], [0, 'expense', 'Витрату', () => expenseForm()]]); }
+export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => [id, id, pageTitle(id), () => go(id)])); }
+export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()]]); }
 document.addEventListener('click', e => {
   const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else go(tab.dataset.tab); return; }
   const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { go(nav.dataset.nav); return; }
@@ -52,6 +61,7 @@ document.addEventListener('click', e => {
   const a = el.dataset.act; if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'file') return;
   if (ACTIONS[a]) { e.preventDefault(); ACTIONS[a](el); }
 });
+document.addEventListener('click', e => { const b = e.target.closest('[data-n-done]'); if (b) { closeModal(); reminderDone(b.dataset.nDone); } });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalEl) closeModal();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[data-act]')) { e.preventDefault(); ACTIONS[e.target.dataset.act](e.target); }
@@ -64,6 +74,7 @@ document.addEventListener('change', async e => {
   else if (a === 'toggle-done') await Repo.setSettings({ ui: { ...D().settings.ui, showDoneTasks: el.checked } });
   else if (a === 'cl-toggle') { const t = Repo.get('tasks', el.dataset.id); await Repo.update('tasks', t.id, { checklist: t.checklist.map(i => i.id === el.dataset.item ? { ...i, done: el.checked } : i) }); }
   else if (a === 'import-file') { const f = el.files[0]; el.value = ''; importFile(f); }
+  else if (a === 'rem-show-done') { UI.f.remShowDone = el.checked; render(); }
 });
 document.addEventListener('input', e => {
   const el = e.target; if (modalEl && modalEl.contains(el)) return;
@@ -72,7 +83,9 @@ document.addEventListener('input', e => {
   else if (el.dataset.be) { const pos = el.selectionStart, id = el.id; Repo.setSettings({ breakeven: { ...D().settings.breakeven, [el.dataset.be]: el.value } }).then(() => refocus(id, pos)); }
 });
 document.addEventListener('submit', async e => {
-  const f = e.target; if (f.dataset.form !== 'total-budget') return; e.preventDefault();
+  const f = e.target;
+  if (f.dataset.form === 'ai-ask') { e.preventDefault(); const q = f.q.value.trim(); if (q) AI.ask(q); return; }
+  if (f.dataset.form !== 'total-budget') return; e.preventDefault();
   const n = parseNum(f.total.value);
   if (Number.isNaN(n) || (n !== null && n < 0)) { f.total.classList.add('bad'); toast('Введіть суму числом, наприклад 400000', 'error'); return; }
   await Repo.setSettings({ totalBudget: n }); toast(n === null ? 'Бюджет очищено' : 'Бюджет збережено');

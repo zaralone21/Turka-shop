@@ -64,4 +64,21 @@ export const Calc = {
     const purchases = Math.ceil(daily / A - 1e-9);
     return { ok: true, F, m, v: vv, A, D, share, monthly, daily, purchases };
   },
+
+  /** Сума закупівлі = Σ кількість × ціна одиниці + доставка. Позиції без ціни або кількості не рахуються й повертаються в missing. */
+  purchaseTotal(p) {
+    let items = 0; const missing = [];
+    for (const i of p.items || []) { if (isNum(i.qty) && isNum(i.unitPrice)) items += i.qty * i.unitPrice; else missing.push(i); }
+    const delivery = isNum(p.deliveryCost) ? p.deliveryCost : 0;
+    return { items, delivery, total: items + delivery, missing };
+  },
+  /** Підсумок закупівель за статусами. */
+  purchases(d) {
+    const r = { planned: 0, awaiting: 0, received: 0, count: { planned: 0, awaiting: 0, received: 0 } };
+    for (const p of d.purchases) {
+      const key = p.status === 'planned' ? 'planned' : (p.status === 'ordered' || p.status === 'awaiting') ? 'awaiting' : p.status === 'received' ? 'received' : null;
+      if (!key) continue; r[key] += Calc.purchaseTotal(p).total; r.count[key]++;
+    }
+    return r;
+  },
 };
