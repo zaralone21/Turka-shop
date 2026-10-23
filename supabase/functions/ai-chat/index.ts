@@ -50,24 +50,32 @@ Deno.serve(async (req) => {
   if (!allowed) return json({ error: "daily_limit" }, 429);
 
   try {
-    const ask = (box: string | null) => client.beta.messages.create({
+    const ask = (box: string | null, msgs: Anthropic.Beta.BetaMessageParam[]) => client.beta.messages.create({
       ...(box ? { container: box } : {}),
       model: MODEL,
       max_tokens: 16000,
       system: SYSTEM,
       tools: [...TOOLS, ...WEB_TOOLS] as Anthropic.Beta.BetaToolUnion[],
-      messages,
+      messages: msgs,
+      // Міркування з попередніх відповідей прив'язані до розмови. Після зміни інструкцій чи інструментів
+      // старі блоки вже не підходять: API їх просто відкидає, а не повертає помилку.
+      thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
       output_config: { effort: EFFORT },
       cache_control: { type: "ephemeral" },
-      betas: ["server-side-fallback-2026-07-01"],
+      betas: ["server-side-fallback-2026-07-01", "thinking-binding-controls-2026-08-01"],
       fallbacks: "default",
     });
-    let res;
-    try { res = await ask(container); }
-    catch (e) {
-      // Середовище живе обмежений час; якщо воно вже недоступне, продовжуємо з новим.
-      if (container && e instanceof Anthropic.BadRequestError && /container/i.test(e.message)) res = await ask(null);
-      else throw e;
+    let box = container, msgs = messages as Anthropic.Beta.BetaMessageParam[], res;
+    for (let attempt = 0; ; attempt++) {
+      try { res = await ask(box, msgs); break; }
+      catch (e) {
+        if (attempt >= 2 || !(e instanceof Anthropic.BadRequestError)) throw e;
+        // Середовище живе обмежений час; якщо воно вже недоступне, продовжуємо з новим.
+        if (box && /container/i.test(e.message)) box = null;
+        // Запасний шлях: прибираємо збережені міркування, решта історії лишається.
+        else if (/signature|thinking|different conversation/i.test(e.message) && hasThinking(msgs)) msgs = withoutThinking(msgs);
+        else throw e;
+      }
     }
     await db.rpc("add_ai_tokens", { uid: user.id, inp: res.usage.input_tokens + (res.usage.cache_read_input_tokens || 0) + (res.usage.cache_creation_input_tokens || 0), outp: res.usage.output_tokens });
     return json({ content: res.content, stop_reason: res.stop_reason, stop_details: res.stop_details ?? null, model: res.model, container: res.container?.id ?? null });
@@ -81,3 +89,15 @@ Deno.serve(async (req) => {
     return json({ error: "upstream", detail: String(e).slice(0, 300) }, 502);
   }
 });
+
+const THINKING = new Set(["thinking", "redacted_thinking"]);
+const hasThinking = (msgs: Anthropic.Beta.BetaMessageParam[]) =>
+  msgs.some(m => Array.isArray(m.content) && m.content.some(b => THINKING.has((b as { type: string }).type)));
+/** Копія історії без блоків міркувань; повідомлення, що лишились порожніми, отримують коротку позначку. */
+function withoutThinking(msgs: Anthropic.Beta.BetaMessageParam[]): Anthropic.Beta.BetaMessageParam[] {
+  return msgs.map(m => {
+    if (!Array.isArray(m.content)) return m;
+    const content = m.content.filter(b => !THINKING.has((b as { type: string }).type));
+    return { ...m, content: content.length ? content : [{ type: "text", text: "…" }] };
+  });
+}
