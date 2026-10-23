@@ -5,9 +5,9 @@ import { kyivParts } from './utils.js';
    інструменти виконуються тут, над записами користувача.
    Історія повідомлень лише доповнюється (не редагується), як того вимагає API. */
 
-export const MAX_STEPS = 10;
-export const CHAT_SOFT_LIMIT = 150_000; // байт: далі варто почати нову розмову
-export const CHAT_STORE_LIMIT = 170_000; // байт: більша розмова не вміститься в запис бази
+export const MAX_STEPS = 30;
+export const CHAT_SOFT_LIMIT = 9_000_000; // байт: далі варто почати нову розмову
+export const CHAT_STORE_LIMIT = 10_000_000; // байт: більша розмова не вміститься в базу
 const RESULT_LIMIT = 30_000;
 const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
 
@@ -59,9 +59,10 @@ export async function runTurn({ chat, text, repo, callModel, now = () => new Dat
 
   for (let step = 0; step < MAX_STEPS; step++) {
     let res;
-    try { res = await callModel(chat.messages); }
+    try { res = await callModel(chat.messages, chat.container || null); }
     catch (e) { chat.log.push({ type: 'error', code: e.code || 'network', text: e.message }); onUpdate(chat); return chat; }
 
+    if (res.container) chat.container = res.container;
     if (res.stop_reason === 'refusal') {
       chat.messages.push({ role: 'assistant', content: [{ type: 'text', text: 'Не можу відповісти на цей запит.' }] });
       chat.log.push({ type: 'error', code: 'refusal', text: 'Модель відмовилась відповідати на цей запит. Спробуйте сформулювати інакше.' });

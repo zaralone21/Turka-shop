@@ -10,12 +10,12 @@ const KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
 const MODEL = Deno.env.get("AI_MODEL") || "claude-opus-5-5";
 const EFFORT = (Deno.env.get("AI_EFFORT") || "medium") as "low" | "medium" | "high";
 const DAILY_LIMIT = Number(Deno.env.get("AI_DAILY_LIMIT") || 300);
-const MAX_BODY = 2_000_000;
+const MAX_BODY = 12_000_000;
 // Пошук у мережі й читання сайтів (виконуються на серверах Anthropic). AI_WEB=off вимикає.
 const WEB = (Deno.env.get("AI_WEB") || "on") !== "off";
 const WEB_TOOLS = WEB ? [
-  { type: "web_search_20260209", name: "web_search", max_uses: 4 },
-  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 6, max_content_tokens: 8000, citations: { enabled: true } },
+  { type: "web_search_20260209", name: "web_search", max_uses: 10 },
+  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 20, max_content_tokens: 12000, citations: { enabled: true } },
 ] : [];
 
 // Функція Supabase має обмеження часу (~150 с), тому один запит до моделі не довше 125 с і без повторів.
@@ -32,11 +32,14 @@ Deno.serve(async (req) => {
   const raw = await req.text();
   if (raw.length > MAX_BODY) return json({ error: "too_long" }, 413);
   let messages: Anthropic.Beta.BetaMessageParam[];
+  let container: string | null = null;
   try {
     const body = JSON.parse(raw);
     messages = body.messages;
+    // Робоче середовище, де AI фільтрує сторінки сайтів: одне на розмову, щоб проміжні файли не губилися між повідомленнями.
+    if (typeof body.container === "string" && /^[\w-]{1,200}$/.test(body.container)) container = body.container;
     if (!Array.isArray(messages) || !messages.length || messages[0].role !== "user") throw new Error("bad");
-    if (messages.length > 400) throw new Error("bad");
+    if (messages.length > 2000) throw new Error("bad");
   } catch {
     return json({ error: "bad_request" }, 400);
   }
@@ -47,7 +50,8 @@ Deno.serve(async (req) => {
   if (!allowed) return json({ error: "daily_limit" }, 429);
 
   try {
-    const res = await client.beta.messages.create({
+    const ask = (box: string | null) => client.beta.messages.create({
+      ...(box ? { container: box } : {}),
       model: MODEL,
       max_tokens: 16000,
       system: SYSTEM,
@@ -58,8 +62,15 @@ Deno.serve(async (req) => {
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
     });
+    let res;
+    try { res = await ask(container); }
+    catch (e) {
+      // Середовище живе обмежений час; якщо воно вже недоступне, продовжуємо з новим.
+      if (container && e instanceof Anthropic.BadRequestError && /container/i.test(e.message)) res = await ask(null);
+      else throw e;
+    }
     await db.rpc("add_ai_tokens", { uid: user.id, inp: res.usage.input_tokens + (res.usage.cache_read_input_tokens || 0) + (res.usage.cache_creation_input_tokens || 0), outp: res.usage.output_tokens });
-    return json({ content: res.content, stop_reason: res.stop_reason, stop_details: res.stop_details ?? null, model: res.model });
+    return json({ content: res.content, stop_reason: res.stop_reason, stop_details: res.stop_details ?? null, model: res.model, container: res.container?.id ?? null });
   } catch (e) {
     console.error("ai-chat:", e instanceof Anthropic.APIError ? `${e.status ?? "-"} ${e.message}` : String(e));
     if (e instanceof Anthropic.APIConnectionTimeoutError) return json({ error: "timeout" }, 504);

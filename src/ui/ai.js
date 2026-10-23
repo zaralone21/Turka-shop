@@ -63,9 +63,9 @@ const ERRORS = {
   bad_key: 'Сервер AI відхилив ключ. Перевірте ANTHROPIC_API_KEY у Supabase.', rate_limited: 'AI зараз перевантажений. Спробуйте за хвилину.',
   too_long: 'Розмова завелика. Почніть нову.', timeout: 'AI працював над запитом задовго й не встиг відповісти. Спробуйте розбити запит на менші, наприклад спершу одна категорія товарів.', unauthorized: 'Сесія завершилась. Увійдіть знову.',
 };
-async function callModel(messages) {
+async function callModel(messages, container) {
   let r;
-  try { r = await fetch(Cloud.functionsUrl('ai-chat'), { method: 'POST', headers: await headers(), body: JSON.stringify({ messages }) }); }
+  try { r = await fetch(Cloud.functionsUrl('ai-chat'), { method: 'POST', headers: await headers(), body: JSON.stringify({ messages, container }) }); }
   catch (e) { if (e instanceof AIError) throw e; throw new AIError('network', 'Немає зв’язку з сервером AI.'); }
   let j = {}; try { j = await r.json(); } catch {}
   if (!r.ok) {
@@ -81,17 +81,38 @@ async function callModel(messages) {
 /* ---------- Розмови ---------- */
 const chats = () => [...D().chats].sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
 const current = () => (UI.chatId && Repo.get('chats', UI.chatId)) || null;
+/* Повна історія для моделі (зі сторінками сайтів) зберігається в окремій таблиці ai_threads,
+   бо може важити мегабайти. У записі розмови — лише видима історія (log). */
+const RECORD_LIMIT = 150_000;
+async function loadThread(chat) {
+  if (chat.messages?.length || !Cloud.user) return { messages: chat.messages || [], container: chat.container || null };
+  const { data, error } = await Cloud.client.from('ai_threads').select('messages, container').eq('chat_id', chat.id).maybeSingle();
+  if (error) throw new Error('thread');
+  return { messages: data?.messages || [], container: data?.container || null };
+}
+async function saveThread(id, messages, container) {
+  const { error } = await Cloud.client.from('ai_threads').upsert({ user_id: Cloud.user.id, chat_id: id, messages, container: container || null, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
 async function send(text) {
   text = String(text || '').trim(); if (!text || S.busy) return;
   let chat = current();
-  if (chat && (chat.closed || chatSize(chat) > CHAT_SOFT_LIMIT)) { chat = null; toast('Попередня розмова завелика, тому почато нову'); }
-  S.busy = true; S.draft = ''; S.focus = true;
+  if (chat && chat.closed) { chat = null; toast('Попередня розмова закрита, тому почато нову'); }
+  S.busy = true; S.draft = ''; S.focus = true; rerender();
+  let thread = { messages: [], container: null };
+  if (chat) {
+    try { thread = await loadThread(chat); }
+    catch { S.busy = false; toast('Не вдалося завантажити історію розмови. Перевірте інтернет і спробуйте ще раз.', 'error'); rerender(); return; }
+    if (chatSize({ messages: thread.messages, log: chat.log }) > CHAT_SOFT_LIMIT) { chat = null; thread = { messages: [], container: null }; toast('Попередня розмова дуже велика, тому почато нову'); }
+  }
   if (!chat) { chat = await Repo.create('chats', { messages: [], log: [], notes: [], title: text.slice(0, 60) }); UI.chatId = chat.id; }
-  const result = await runTurn({ chat, text, repo: Repo, callModel, onUpdate: c => { S.live = c; rerender(); } });
+  const result = await runTurn({ chat: { ...chat, ...thread }, text, repo: Repo, callModel, onUpdate: c => { S.live = c; rerender(); } });
+  let saved = false;
+  if (Cloud.user && chatSize(result) <= CHAT_STORE_LIMIT) { try { await saveThread(chat.id, result.messages, result.container); saved = true; } catch {} }
   S.busy = false; S.live = null;
-  // Розмова з великими сторінками сайтів може не вміститися в запис бази: тоді зберігаємо лише видиму історію й закриваємо її.
-  const full = chatSize(result) <= CHAT_STORE_LIMIT;
-  await Repo.update('chats', chat.id, full ? { messages: result.messages, log: result.log, notes: result.notes } : { messages: [], log: result.log, notes: [], closed: true });
+  if (saved) await Repo.update('chats', chat.id, { messages: [], container: null, log: result.log, notes: result.notes });
+  else if (chatSize({ messages: result.messages }) < RECORD_LIMIT) await Repo.update('chats', chat.id, { messages: result.messages, container: result.container || null, log: result.log, notes: result.notes });
+  else { await Repo.update('chats', chat.id, { messages: [], log: result.log, notes: [], closed: true }); toast('Не вдалося зберегти повну історію розмови, тому її закрито. Наступне повідомлення почне нову.', 'error'); }
   if (result.log.at(-1)?.code === 'not_configured') refreshStatus(true);
 }
 const entryOf = (i) => { const c = current(); return c ? c.log[i] : null; };
@@ -172,7 +193,7 @@ function chatHtml(compact) {
       ${canAsk() ? `<div class="row" style="justify-content:center">${SUGGEST.map(s => `<button class="btn sm" data-act="ai-suggest" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : ''}</div>`;
   return `<div class="chat">
     <div class="chat-log" id="chat-log" aria-live="polite">${body}${S.busy ? '<div class="msg tool">Думаю…</div>' : ''}</div>
-    ${c && c.closed && !S.busy ? '<div class="callout" style="margin:0 12px 8px">Розмова стала завеликою для збереження, тому її закрито. Наступне повідомлення почне нову розмову.</div>' : ''}
+    ${c && c.closed && !S.busy ? '<div class="callout" style="margin:0 12px 8px">Цю розмову закрито. Наступне повідомлення почне нову розмову.</div>' : ''}
     ${log.length && hint && !canAsk() ? `<div class="callout warn" style="margin:0 12px 8px">${esc(hint)}</div>` : ''}
     <form class="chat-form" data-form="ai-chat"><textarea class="input" name="q" id="ai-input" rows="1" placeholder="${canAsk() ? 'Напишіть запит…' : 'AI недоступний'}" aria-label="Повідомлення AI-менеджеру" ${canAsk() && !S.busy ? '' : 'disabled'}></textarea><button class="btn primary" type="submit" ${canAsk() && !S.busy ? '' : 'disabled'} aria-label="Надіслати">Надіслати</button></form>
   </div>`;
@@ -214,7 +235,12 @@ export const AI = {
     'ai-new': () => { UI.chatId = null; S.draft = ''; S.focus = true; rerender(); },
     'ai-chat': el => { UI.chatId = el.dataset.id; rerender(); },
     'ai-suggest': el => send(el.dataset.q),
-    'ai-del': async el => { const c = Repo.get('chats', el.dataset.id); if (!c) return; await Repo.remove('chats', c.id); UI.chatId = null; toast('Розмову видалено', null, () => Repo.restore('chats', c.id, c)); },
+    'ai-del': async el => {
+      const c = Repo.get('chats', el.dataset.id); if (!c) return;
+      await Repo.remove('chats', c.id); UI.chatId = null; toast('Розмову видалено', null, () => Repo.restore('chats', c.id, c));
+      // Повну історію прибираємо, коли минув час на «Скасувати».
+      setTimeout(() => { if (!Repo.get('chats', c.id) && Cloud.user) Cloud.client.from('ai_threads').delete().eq('chat_id', c.id).then(() => {}, () => {}); }, 10_000);
+    },
     'ai-copy': el => { const e = entryOf(+el.dataset.i); if (e) copyText(e.text); },
     'ai-undo-create': async el => {
       const i = +el.dataset.i; const e = entryOf(i); if (!e || e.undone) return;

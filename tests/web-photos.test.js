@@ -80,3 +80,20 @@ describe('AI пропонує фото товару', () => {
     await expect(runTool('propose_product_photos', { productId: 'p1', urls: ['ftp://a.ua/1.jpg'] }, { repo, now: new Date() })).rejects.toThrow(/https/);
   });
 });
+
+describe('робоче середовище AI зберігається між кроками й повідомленнями', () => {
+  it('передає id середовища назад моделі', async () => {
+    const repo = await repoWith();
+    const seen = [];
+    const replies = [
+      { stop_reason: 'pause_turn', container: 'cnt_1', content: [{ type: 'server_tool_use', id: 's1', name: 'web_fetch', input: {} }] },
+      { stop_reason: 'end_turn', container: 'cnt_1', content: [{ type: 'text', text: 'готово' }] },
+    ];
+    const chat = await runTurn({ chat: { messages: [], log: [], container: null }, text: 'x', repo, callModel: async (m, c) => { seen.push(c); return replies.shift(); } });
+    expect(seen).toEqual([null, 'cnt_1']);
+    expect(chat.container).toBe('cnt_1');
+    const next = await runTurn({ chat, text: 'далі', repo, callModel: async (m, c) => { seen.push(c); return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'ок' }] }; } });
+    expect(seen.at(-1)).toBe('cnt_1');
+    expect(next.container).toBe('cnt_1');
+  });
+});
