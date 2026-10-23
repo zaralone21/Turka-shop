@@ -61,3 +61,22 @@ describe('AI: пошук у мережі й сайти', () => {
     expect(out.map(b => b.type)).toEqual(['fallback', 'text']);
   });
 });
+
+describe('AI пропонує фото товару', () => {
+  const withProduct = photos => repoWith(d => d.products.push({ id: 'p1', name: 'Шкарпетки', photos }));
+  it('лише показує фото на підтвердження, нічого не змінюючи', async () => {
+    const repo = await withProduct([]);
+    const { result, effect } = await runTool('propose_product_photos', { productId: 'p1', urls: ['https://jubi.ua/a.jpg', 'https://jubi.ua/a.jpg', 'http://x.ua/b.jpg', 'javascript:alert(1)', 'https://jubi.ua/c.webp'], source: 'https://jubi.ua/socks' }, { repo, now: new Date() });
+    expect(result.pending).toBe(true);
+    expect(effect).toMatchObject({ type: 'photos', state: 'pending', productId: 'p1', urls: ['https://jubi.ua/a.jpg', 'https://jubi.ua/c.webp'], source: 'https://jubi.ua/socks' });
+    expect(repo.data.products[0].photos).toEqual([]);
+  });
+  it('не пропонує більше, ніж уміщається, і не працює з неіснуючим товаром', async () => {
+    const full = Array.from({ length: 7 }, (_, i) => ({ id: 'f' + i, data: PNG }));
+    const repo = await withProduct(full);
+    const { effect } = await runTool('propose_product_photos', { productId: 'p1', urls: ['https://a.ua/1.jpg', 'https://a.ua/2.jpg'] }, { repo, now: new Date() });
+    expect(effect.urls).toHaveLength(1);
+    await expect(runTool('propose_product_photos', { productId: 'nope', urls: ['https://a.ua/1.jpg'] }, { repo, now: new Date() })).rejects.toThrow(/не знайдено/);
+    await expect(runTool('propose_product_photos', { productId: 'p1', urls: ['ftp://a.ua/1.jpg'] }, { repo, now: new Date() })).rejects.toThrow(/https/);
+  });
+});

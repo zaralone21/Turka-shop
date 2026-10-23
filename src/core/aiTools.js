@@ -178,6 +178,7 @@ function dataQuality(d) {
 }
 
 /* ---------- Зміни з підтвердженням ---------- */
+const MAX_PHOTOS = 8;
 const PROTECTED = new Set(['id', 'createdAt', 'updatedAt', 'fireAt', 'photos']);
 const show = v => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 /** Перевіряє пропоновані зміни й будує точний перелік «було → стане». Нічого не змінює. */
@@ -241,6 +242,16 @@ export async function runTool(name, input, { repo, now = new Date() }) {
     case 'compare_offers': return { result: compareOffers(d, input.query) };
     case 'check_purchase_plan': return { result: checkPurchasePlan(d, input.items, input.deliveryCost) };
     case 'data_quality': return { result: dataQuality(d) };
+    case 'propose_product_photos': {
+      const p = d.products.find(x => x.id === input.productId); need(p, 'Товар не знайдено. Спершу створіть його через propose_changes.');
+      const urls = [...new Set((Array.isArray(input.urls) ? input.urls : []).map(u => String(u || '').trim()))].filter(u => /^https:\/\/[^\s"'<>]+$/i.test(u));
+      need(urls.length, 'Потрібні прямі посилання https на зображення');
+      const room = MAX_PHOTOS - (p.photos || []).length; need(room > 0, `У товару вже ${MAX_PHOTOS} фото, більше додати не можна`);
+      const list = urls.slice(0, Math.min(4, room));
+      const source = /^https?:\/\//i.test(String(input.source || '')) ? String(input.source) : '';
+      return { result: { pending: true, shown: list.length, note: 'Фото показано користувачу для підтвердження. Не кажи, що їх додано, доки користувач не підтвердить.' },
+        effect: { type: 'photos', state: 'pending', productId: p.id, name: p.name, urls: list, source } };
+    }
     case 'create_task': {
       need(String(input.title || '').trim(), 'Потрібна назва завдання');
       need(!input.deadline || isDate(input.deadline), 'Термін має бути у форматі YYYY-MM-DD');

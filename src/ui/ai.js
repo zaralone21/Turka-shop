@@ -5,6 +5,7 @@ import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
 import { esc, fmtDate, fmtMoney } from '../core/utils.js';
 import { copyText } from './backup.js';
+import { deletePhotos, importPhoto } from './photos.js';
 import { D, UI, VIEWS, toast } from './shared.js';
 
 /* ---------- AI-менеджер: чат, підказки, дії з підтвердженням ---------- */
@@ -30,7 +31,7 @@ const TOOL_LABELS = {
   search_records: 'пошук', get_record: 'запис', compare_offers: 'порівняння цін', check_purchase_plan: 'розрахунок закупівлі', data_quality: 'перевірка даних',
   web_search: 'пошук у мережі', web_fetch: 'перегляд сайту', create_task: 'створення завдання', create_note: 'створення нотатки', create_reminder: 'створення нагадування', propose_changes: 'підготовка змін', draft_message: 'чернетка',
 };
-const OWN_CARD = new Set(['create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
+const OWN_CARD = new Set(['propose_product_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
 const MONEY = new Set(['purchasePrice', 'retailPrice', 'planned', 'paid', 'totalBudget', 'deliveryCost']);
 const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'edit-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder' };
 const CREATED = { tasks: 'завдання', notes: 'нотатку', reminders: 'нагадування' };
@@ -136,6 +137,15 @@ function entryHtml(e, i, interactive) {
     return `<div class="msg action"><div>✓ Створено ${CREATED[e.collection] || 'запис'} «${esc(e.title)}»</div>
       <div class="row">${e.undone ? '<span class="small muted">Скасовано</span>' : exists ? `<button class="btn sm" data-act="${COLLECTION_ACT[e.collection]}" data-id="${esc(e.id)}">Відкрити</button>${interactive ? `<button class="btn sm ghost" data-act="ai-undo-create" data-i="${i}">Скасувати</button>` : ''}` : '<span class="small muted">Запис уже видалено</span>'}</div></div>`;
   }
+  if (e.type === 'photos') {
+    const prod = Repo.get('products', e.productId);
+    const head = e.state === 'pending' ? `<b>Додати фото до «${esc(e.name)}»?</b>` : e.state === 'applied' ? `<b>Додано фото до «${esc(e.name)}»: ${(e.added || []).length}</b>` : e.state === 'busy' ? `<b>Завантажую фото…</b>` : e.state === 'undone' ? 'Фото прибрано' : 'Фото не додано';
+    const imgs = e.state === 'pending' || e.state === 'busy' ? `<div class="ai-photos">${e.urls.map(u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : '';
+    const fails = (e.failed || []).length ? `<div class="small muted">Не вдалося: ${e.failed.map(f => esc(f)).join('; ')}</div>` : '';
+    const btns = !interactive ? '' : e.state === 'pending' ? `<button class="btn sm primary" data-act="ai-photos-ok" data-i="${i}">Додати</button><button class="btn sm" data-act="ai-photos-no" data-i="${i}">Відхилити</button>`
+      : e.state === 'applied' && prod ? `<button class="btn sm" data-act="edit-product" data-id="${esc(prod.id)}">Відкрити товар</button>${(e.added || []).length ? `<button class="btn sm ghost" data-act="ai-photos-undo" data-i="${i}">Прибрати</button>` : ''}` : '';
+    return `<div class="msg action ${e.state === 'pending' ? 'confirm' : ''}"><div>${head}</div>${e.source ? `<div class="small muted">Джерело: <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">${esc(e.source.replace(/^https?:\/\//, '').slice(0, 60))}</a></div>` : ''}${imgs}${fails}<div class="row">${btns}</div></div>`;
+  }
   if (e.type === 'confirm') {
     const rows = e.plan.map(c => `<li><b>${c.action === 'create' ? 'Створити' : c.action === 'delete' ? 'Видалити' : 'Змінити'}</b> ${esc(Schema.LABELS[c.collection] || 'налаштування')}: «${esc(c.title)}»${c.diff.length && c.action !== 'delete' ? `<ul class="diff">${c.diff.map(x => `<li>${esc(fieldName(x.field))}: ${c.action === 'create' ? '' : `<s>${esc(val(x.field, x.from))}</s> → `}<b>${esc(val(x.field, x.to))}</b></li>`).join('')}</ul>` : ''}</li>`).join('');
     const state = { pending: '', applied: '<span class="pill accent">Виконано</span>', rejected: '<span class="pill">Відхилено</span>', undone: '<span class="pill">Скасовано</span>' }[e.state] || '';
@@ -215,7 +225,26 @@ export const AI = {
       const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'pending') return;
       let plan; try { plan = planChanges(Repo.data, e.plan); } catch (err) { toast('Дані вже змінились: ' + err.message + '. Попросіть AI підготувати зміни знову.', 'error'); return; }
       const undo = await applyChanges(Repo, plan);
-      await patchEntry(i, { state: 'applied', undo }, `Користувач підтвердив, зміни виконано: ${e.summary}`); toast('Зміни виконано');
+      const created = undo.filter(u => !u.prev).map(u => { const r = Repo.get(u.collection, u.id); return r ? `${u.collection}/${u.id} «${r.name || r.title || ''}»` : ''; }).filter(Boolean);
+      await patchEntry(i, { state: 'applied', undo }, `Користувач підтвердив, зміни виконано: ${e.summary}${created.length ? `. Створено: ${created.join(', ')}` : ''}`); toast('Зміни виконано');
+    },
+    'ai-photos-ok': async el => {
+      const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'pending') return;
+      const p = Repo.get('products', e.productId); if (!p) { toast('Товар уже видалено', 'error'); return; }
+      await patchEntry(i, { state: 'busy' });
+      const added = [], failed = [];
+      for (const u of e.urls) { try { added.push(await importPhoto(p.id, u)); } catch (err) { failed.push(err.message); } }
+      const cur = Repo.get('products', p.id);
+      if (cur && added.length) await Repo.update('products', p.id, { photos: [...(cur.photos || []), ...added].slice(0, 8) });
+      await patchEntry(i, { state: 'applied', added: added.map(x => x.id), failed }, `Користувач підтвердив фото для «${e.name}»: додано ${added.length}${failed.length ? `, не вдалося ${failed.length} (${failed.join('; ')})` : ''}`);
+      toast(added.length ? `Додано фото: ${added.length}` : 'Фото не вдалося завантажити', added.length ? null : 'error');
+    },
+    'ai-photos-no': async el => { const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'pending') return; await patchEntry(i, { state: 'rejected' }, `Користувач відхилив фото для «${e.name}»`); },
+    'ai-photos-undo': async el => {
+      const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'applied') return;
+      const p = Repo.get('products', e.productId); const ids = new Set(e.added || []);
+      if (p) { const gone = (p.photos || []).filter(x => ids.has(x.id)); await Repo.update('products', p.id, { photos: (p.photos || []).filter(x => !ids.has(x.id)) }); deletePhotos(gone); }
+      await patchEntry(i, { state: 'undone' }, `Користувач прибрав додані фото з «${e.name}»`); toast('Фото прибрано');
     },
     'ai-reject': async el => { const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'pending') return; await patchEntry(i, { state: 'rejected' }, `Користувач відхилив зміни: ${e.summary}`); },
     'ai-undo-changes': async el => {

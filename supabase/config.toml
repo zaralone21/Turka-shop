@@ -422,3 +422,6 @@ verify_jwt = false
 
 [functions.push]
 verify_jwt = false
+
+[functions.import-photo]
+verify_jwt = false

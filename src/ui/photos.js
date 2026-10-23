@@ -68,3 +68,14 @@ export async function hydratePhotos(root) {
   }
   imgs.forEach(i => { const hit = urls.get(i.dataset.photo); if (hit) { i.src = hit.url; i.removeAttribute('data-photo'); } });
 }
+/** Сервер завантажує фото за посиланням у сховище користувача. Повертає {id, path}. */
+export async function importPhoto(productId, url) {
+  if (!cloudOn()) throw new Error('Увійдіть в обліковий запис, щоб додавати фото за посиланням');
+  const token = await Cloud.token();
+  let r;
+  try { r = await fetch(Cloud.functionsUrl('import-photo'), { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: Cloud.anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ productId, url }) }); }
+  catch { throw new Error('немає зв’язку з сервером'); }
+  let j = {}; try { j = await r.json(); } catch {}
+  if (!r.ok || !j.path) throw new Error(j.detail || 'не вдалося завантажити зображення');
+  return { id: j.id, path: j.path };
+}
