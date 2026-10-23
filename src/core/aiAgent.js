@@ -35,6 +35,20 @@ export function textOf(content) {
   if (out && sources.size) out += '\n\nДжерела:\n' + [...sources].slice(0, 8).map(([u, t]) => `- [${t.replace(/[[\]]/g, '')}](${u})`).join('\n');
   return out;
 }
+/** Видима історія розмови текстом — щоб продовжити її в новій розмові, коли повна історія недоступна. */
+export function transcriptOf(log, maxChars = 120_000) {
+  const lines = (log || []).map(e => {
+    if (e.role === 'user') return `Користувач: ${e.text}`;
+    if (e.role === 'assistant') return `AI: ${e.text}`;
+    if (e.type === 'created') return `[Створено ${e.collection}/${e.id}: ${e.title}${e.undone ? ', потім скасовано' : ''}]`;
+    if (e.type === 'confirm') return `[Запропоновано зміни: ${e.summary}; стан: ${e.state}]`;
+    if (e.type === 'photos') return `[Запропоновано фото до products/${e.productId}; стан: ${e.state}]`;
+    return '';
+  }).filter(Boolean);
+  let out = lines.join('\n\n');
+  if (out.length > maxChars) out = '…\n' + out.slice(out.length - maxChars);
+  return out;
+}
 const stamp = now => { const p = kyivParts(now); return `[Зараз: ${p.date} ${p.time}, Київ]`; };
 const toolUses = msg => (msg && msg.role === 'assistant' && Array.isArray(msg.content) ? msg.content.filter(b => b.type === 'tool_use') : []);
 
