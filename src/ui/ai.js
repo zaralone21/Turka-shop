@@ -3,7 +3,7 @@ import { applyChanges, planChanges, undoChanges } from '../core/aiTools.js';
 import { Cloud } from '../core/cloud.js';
 import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
-import { esc, fmtDate, fmtMoney } from '../core/utils.js';
+import { esc, fmtDate, fmtMoney, plural } from '../core/utils.js';
 import { copyText } from './backup.js';
 import { deletePhotos, importPhoto } from './photos.js';
 import { D, UI, VIEWS, toast } from './shared.js';
@@ -31,7 +31,7 @@ const TOOL_LABELS = {
   search_records: 'пошук', get_record: 'запис', compare_offers: 'порівняння цін', check_purchase_plan: 'розрахунок закупівлі', data_quality: 'перевірка даних',
   web_search: 'пошук у мережі', web_fetch: 'перегляд сайту', create_task: 'створення завдання', create_note: 'створення нотатки', create_reminder: 'створення нагадування', propose_changes: 'підготовка змін', draft_message: 'чернетка',
 };
-const OWN_CARD = new Set(['propose_product_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
+const OWN_CARD = new Set(['propose_product_photos', 'add_product_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
 const MONEY = new Set(['purchasePrice', 'retailPrice', 'planned', 'paid', 'totalBudget', 'deliveryCost']);
 const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'edit-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder' };
 const CREATED = { tasks: 'завдання', notes: 'нотатку', reminders: 'нагадування' };
@@ -106,7 +106,7 @@ async function send(text) {
     if (chatSize({ messages: thread.messages, log: chat.log }) > CHAT_SOFT_LIMIT) { chat = null; thread = { messages: [], container: null }; toast('Попередня розмова дуже велика, тому почато нову'); }
   }
   if (!chat) { chat = await Repo.create('chats', { messages: [], log: [], notes: [], title: text.slice(0, 60) }); UI.chatId = chat.id; }
-  const result = await runTurn({ chat: { ...chat, ...thread }, text, repo: Repo, callModel, onUpdate: c => { S.live = c; rerender(); } });
+  const result = await runTurn({ chat: { ...chat, ...thread }, text, repo: Repo, callModel, importPhoto: Cloud.user ? importPhoto : null, onUpdate: c => { S.live = c; rerender(); } });
   let saved = false;
   if (Cloud.user && chatSize(result) <= CHAT_STORE_LIMIT) { try { await saveThread(chat.id, result.messages, result.container); saved = true; } catch {} }
   S.busy = false; S.live = null;
@@ -158,6 +158,15 @@ function entryHtml(e, i, interactive) {
     const exists = Repo.get(e.collection, e.id);
     return `<div class="msg action"><div>✓ Створено ${CREATED[e.collection] || 'запис'} «${esc(e.title)}»</div>
       <div class="row">${e.undone ? '<span class="small muted">Скасовано</span>' : exists ? `<button class="btn sm" data-act="${COLLECTION_ACT[e.collection]}" data-id="${esc(e.id)}">Відкрити</button>${interactive ? `<button class="btn sm ghost" data-act="ai-undo-create" data-i="${i}">Скасувати</button>` : ''}` : '<span class="small muted">Запис уже видалено</span>'}</div></div>`;
+  }
+  if (e.type === 'photos' && e.batch) {
+    const total = e.items.reduce((s, x) => s + x.added.length, 0);
+    const head = e.state === 'undone' ? `Фото прибрано (${total})` : (() => { const n = e.items.filter(x => x.added.length).length; return `<b>Додано фото: ${total}</b> до ${n} ${plural(n, 'товару', 'товарів', 'товарів')}`; })();
+    const rows = e.items.map(x => { const p = Repo.get('products', x.productId);
+      const name = p ? `<button class="btn link" data-act="edit-product" data-id="${esc(p.id)}">${esc(p.name)}</button>` : esc(x.name || 'товар');
+      return `<li>${name}: ${x.added.length ? `+${x.added.length}` : '0'}${x.failed.length ? ` <span class="small muted">(не вдалося: ${x.failed.map(esc).join('; ')})</span>` : ''}</li>`; }).join('');
+    const btn = interactive && e.state === 'applied' && total ? `<button class="btn sm ghost" data-act="ai-photos-undo-all" data-i="${i}">Прибрати всі додані фото</button>` : '';
+    return `<div class="msg action"><div>${head}</div>${e.source ? `<div class="small muted">Джерело: <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">${esc(e.source.replace(/^https?:\/\//, '').slice(0, 60))}</a></div>` : ''}${e.state !== 'undone' ? `<ul class="plan">${rows}</ul>` : ''}<div class="row">${btn}</div></div>`;
   }
   if (e.type === 'photos') {
     const prod = Repo.get('products', e.productId);
@@ -272,6 +281,15 @@ export const AI = {
       if (cur && added.length) await Repo.update('products', p.id, { photos: [...(cur.photos || []), ...added].slice(0, 8) });
       await patchEntry(i, { state: 'applied', added: added.map(x => x.id), failed }, `Користувач підтвердив фото для «${e.name}»: додано ${added.length}${failed.length ? `, не вдалося ${failed.length} (${failed.join('; ')})` : ''}`);
       toast(added.length ? `Додано фото: ${added.length}` : 'Фото не вдалося завантажити', added.length ? null : 'error');
+    },
+    'ai-photos-undo-all': async el => {
+      const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'applied' || !e.batch) return;
+      for (const x of e.items) {
+        const p = Repo.get('products', x.productId); if (!p || !x.added.length) continue;
+        const ids = new Set(x.added); const gone = (p.photos || []).filter(f => ids.has(f.id));
+        await Repo.update('products', p.id, { photos: (p.photos || []).filter(f => !ids.has(f.id)) }); deletePhotos(gone);
+      }
+      await patchEntry(i, { state: 'undone' }, 'Користувач прибрав усі фото, додані в попередньому кроці'); toast('Фото прибрано');
     },
     'ai-photos-no': async el => { const i = +el.dataset.i; const e = entryOf(i); if (!e || e.state !== 'pending') return; await patchEntry(i, { state: 'rejected' }, `Користувач відхилив фото для «${e.name}»`); },
     'ai-photos-undo': async el => {

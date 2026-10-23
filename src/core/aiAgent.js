@@ -63,7 +63,7 @@ export const chatSize = chat => JSON.stringify(chat.messages || []).length + JSO
  * Один хід розмови. chat — {messages, log, notes}; повертає оновлений chat.
  * onUpdate(chat) викликається після кожного кроку, щоб інтерфейс показував прогрес.
  */
-export async function runTurn({ chat, text, repo, callModel, now = () => new Date(), onUpdate = () => {} }) {
+export async function runTurn({ chat, text, repo, callModel, importPhoto = null, now = () => new Date(), onUpdate = () => {} }) {
   chat = { ...chat, messages: [...(chat.messages || [])], log: [...(chat.log || [])] };
   const notes = (chat.notes || []).map(n => `[${n}]`).join('\n');
   chat.notes = [];
@@ -99,7 +99,7 @@ export async function runTurn({ chat, text, repo, callModel, now = () => new Dat
     const results = [];
     for (const call of calls) {
       try {
-        const { result, effect } = await runTool(call.name, call.input, { repo, now: now() });
+        const { result, effect } = await runTool(call.name, call.input, { repo, now: now(), importPhoto });
         let out = JSON.stringify(result);
         if (out.length > RESULT_LIMIT) out = out.slice(0, RESULT_LIMIT) + '… [обрізано, уточніть запит]';
         results.push({ type: 'tool_result', tool_use_id: call.id, content: out });

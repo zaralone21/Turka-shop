@@ -229,7 +229,7 @@ export async function undoChanges(repo, undo) {
  * Повертає {result, effect}. result іде моделі; effect — для інтерфейсу:
  * {type:'created', collection, id, title} | {type:'confirm', summary, plan} | {type:'draft', supplierId, text}.
  */
-export async function runTool(name, input, { repo, now = new Date() }) {
+export async function runTool(name, input, { repo, now = new Date(), importPhoto = null }) {
   const d = repo.data; input = input && typeof input === 'object' ? input : {};
   switch (name) {
     case 'get_overview': return { result: overview(d, now) };
@@ -242,15 +242,29 @@ export async function runTool(name, input, { repo, now = new Date() }) {
     case 'compare_offers': return { result: compareOffers(d, input.query) };
     case 'check_purchase_plan': return { result: checkPurchasePlan(d, input.items, input.deliveryCost) };
     case 'data_quality': return { result: dataQuality(d) };
-    case 'propose_product_photos': {
-      const p = d.products.find(x => x.id === input.productId); need(p, 'Товар не знайдено. Спершу створіть його через propose_changes.');
-      const urls = [...new Set((Array.isArray(input.urls) ? input.urls : []).map(u => String(u || '').trim()))].filter(u => /^https:\/\/[^\s"'<>]+$/i.test(u));
-      need(urls.length, 'Потрібні прямі посилання https на зображення');
-      const room = MAX_PHOTOS - (p.photos || []).length; need(room > 0, `У товару вже ${MAX_PHOTOS} фото, більше додати не можна`);
-      const list = urls.slice(0, Math.min(4, room));
+    case 'add_product_photos': {
+      need(typeof importPhoto === 'function', 'Фото за посиланням можна додавати лише після входу в обліковий запис');
+      const items = (Array.isArray(input.items) ? input.items : []).slice(0, 30);
+      need(items.length, 'Потрібен список товарів із посиланнями на фото');
       const source = /^https?:\/\//i.test(String(input.source || '')) ? String(input.source) : '';
-      return { result: { pending: true, shown: list.length, note: 'Фото показано користувачу для підтвердження. Не кажи, що їх додано, доки користувач не підтвердить.' },
-        effect: { type: 'photos', state: 'pending', productId: p.id, name: p.name, urls: list, source } };
+      const done = [];
+      for (const it of items) {
+        const p = repo.data.products.find(x => x.id === it?.productId);
+        if (!p) { done.push({ productId: it?.productId || null, name: '', added: [], failed: ['товар не знайдено'] }); continue; }
+        const room = MAX_PHOTOS - (p.photos || []).length;
+        const urls = [...new Set((Array.isArray(it.urls) ? it.urls : []).map(u => String(u || '').trim()))].filter(u => /^https:\/\/[^\s"'<>]+$/i.test(u) ).slice(0, Math.max(0, Math.min(4, room)));
+        const added = [], failed = [];
+        if (room <= 0) failed.push(`у товару вже ${MAX_PHOTOS} фото`);
+        else if (!urls.length) failed.push('немає коректних посилань https');
+        // Завантажуємо паралельно по кілька, щоб великі підбірки не тягнулися довго.
+        const results = await Promise.all(urls.map(u => importPhoto(p.id, u).then(x => ({ ok: x }), e => ({ err: String(e?.message || e) }))));
+        results.forEach(r => (r.ok ? added.push(r.ok) : failed.push(r.err)));
+        if (added.length) { const cur = repo.data.products.find(x => x.id === p.id); await repo.update('products', p.id, { photos: [...(cur.photos || []), ...added].slice(0, MAX_PHOTOS) }); }
+        done.push({ productId: p.id, name: p.name, added: added.map(x => x.id), failed });
+      }
+      const total = done.reduce((s, x) => s + x.added.length, 0);
+      return { result: { added: total, products: done.map(x => ({ productId: x.productId, added: x.added.length, failed: x.failed })) },
+        effect: total || done.some(x => x.failed.length) ? { type: 'photos', state: 'applied', batch: true, items: done, source } : null };
     }
     case 'create_task': {
       need(String(input.title || '').trim(), 'Потрібна назва завдання');
