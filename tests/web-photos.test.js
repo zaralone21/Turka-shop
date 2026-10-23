@@ -62,22 +62,24 @@ describe('AI: пошук у мережі й сайти', () => {
   });
 });
 
-describe('AI пропонує фото товару', () => {
-  const withProduct = photos => repoWith(d => d.products.push({ id: 'p1', name: 'Шкарпетки', photos }));
-  it('лише показує фото на підтвердження, нічого не змінюючи', async () => {
-    const repo = await withProduct([]);
-    const { result, effect } = await runTool('propose_product_photos', { productId: 'p1', urls: ['https://jubi.ua/a.jpg', 'https://jubi.ua/a.jpg', 'http://x.ua/b.jpg', 'javascript:alert(1)', 'https://jubi.ua/c.webp'], source: 'https://jubi.ua/socks' }, { repo, now: new Date() });
-    expect(result.pending).toBe(true);
-    expect(effect).toMatchObject({ type: 'photos', state: 'pending', productId: 'p1', urls: ['https://jubi.ua/a.jpg', 'https://jubi.ua/c.webp'], source: 'https://jubi.ua/socks' });
-    expect(repo.data.products[0].photos).toEqual([]);
+describe('AI додає фото до товарів одразу, партією', () => {
+  const two = () => repoWith(d => d.products.push({ id: 'p1', name: 'Шкарпетки', photos: [] }, { id: 'p2', name: 'Тапки', photos: Array.from({ length: 8 }, (_, i) => ({ id: 'f' + i, data: PNG })) }));
+  it('додає фото до кількох товарів, пропускаючи некоректне', async () => {
+    const repo = await two(); const calls = [];
+    const importPhoto = async (pid, url) => { calls.push([pid, url]); if (url.includes('bad')) throw new Error('файл більший за 5 МБ'); return { id: 'n' + calls.length, path: `u/${pid}/n${calls.length}.jpg` }; };
+    const { result, effect } = await runTool('add_product_photos', { items: [
+      { productId: 'p1', urls: ['https://jubi.ua/a.jpg', 'https://jubi.ua/a.jpg', 'http://x.ua/b.jpg', 'https://jubi.ua/bad.jpg'] },
+      { productId: 'p2', urls: ['https://jubi.ua/c.jpg'] },
+      { productId: 'nope', urls: ['https://jubi.ua/d.jpg'] },
+    ], source: 'https://jubi.ua' }, { repo, now: new Date(), importPhoto });
+    expect(calls).toEqual([['p1', 'https://jubi.ua/a.jpg'], ['p1', 'https://jubi.ua/bad.jpg']]);
+    expect(result.added).toBe(1);
+    expect(repo.data.products[0].photos).toEqual([{ id: 'n1', path: 'u/p1/n1.jpg' }]);
+    expect(effect.items.map(x => [x.productId, x.added.length, x.failed.length])).toEqual([['p1', 1, 1], ['p2', 0, 1], ['nope', 0, 1]]);
   });
-  it('не пропонує більше, ніж уміщається, і не працює з неіснуючим товаром', async () => {
-    const full = Array.from({ length: 7 }, (_, i) => ({ id: 'f' + i, data: PNG }));
-    const repo = await withProduct(full);
-    const { effect } = await runTool('propose_product_photos', { productId: 'p1', urls: ['https://a.ua/1.jpg', 'https://a.ua/2.jpg'] }, { repo, now: new Date() });
-    expect(effect.urls).toHaveLength(1);
-    await expect(runTool('propose_product_photos', { productId: 'nope', urls: ['https://a.ua/1.jpg'] }, { repo, now: new Date() })).rejects.toThrow(/не знайдено/);
-    await expect(runTool('propose_product_photos', { productId: 'p1', urls: ['ftp://a.ua/1.jpg'] }, { repo, now: new Date() })).rejects.toThrow(/https/);
+  it('без входу чесно відмовляє', async () => {
+    const repo = await two();
+    await expect(runTool('add_product_photos', { items: [{ productId: 'p1', urls: ['https://a.ua/1.jpg'] }] }, { repo, now: new Date() })).rejects.toThrow(/входу/);
   });
 });
 
