@@ -97,3 +97,14 @@ describe('робоче середовище AI зберігається між �
     expect(next.container).toBe('cnt_1');
   });
 });
+
+describe('продовження закритої розмови', () => {
+  it('збирає видимий текст і обрізає початок, якщо задовго', async () => {
+    const { transcriptOf } = await import('../src/core/aiAgent.js');
+    const log = [{ role: 'user', text: 'підбери шкарпетки' }, { type: 'tool', name: 'web_fetch' }, { role: 'assistant', text: 'Знайшов 20 позицій' }, { type: 'created', collection: 'tasks', id: 't1', title: 'Подзвонити' }];
+    expect(transcriptOf(log)).toBe('Користувач: підбери шкарпетки\n\nAI: Знайшов 20 позицій\n\n[Створено tasks/t1: Подзвонити]');
+    const long = transcriptOf([{ role: 'user', text: 'a'.repeat(500) }, { role: 'assistant', text: 'кінець' }], 100);
+    expect(long.startsWith('…')).toBe(true);
+    expect(long.endsWith('AI: кінець')).toBe(true);
+  });
+});
