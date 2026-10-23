@@ -14,11 +14,12 @@ const MAX_BODY = 2_000_000;
 // Пошук у мережі й читання сайтів (виконуються на серверах Anthropic). AI_WEB=off вимикає.
 const WEB = (Deno.env.get("AI_WEB") || "on") !== "off";
 const WEB_TOOLS = WEB ? [
-  { type: "web_search_20260209", name: "web_search", max_uses: 5, user_location: { type: "approximate", country: "UA", timezone: "Europe/Kyiv" } },
-  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5, max_content_tokens: 8000, citations: { enabled: true } },
+  { type: "web_search_20260209", name: "web_search", max_uses: 3, user_location: { type: "approximate", country: "UA", timezone: "Europe/Kyiv" } },
+  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3, max_content_tokens: 8000, citations: { enabled: true } },
 ] : [];
 
-const client = KEY ? new Anthropic({ apiKey: KEY, maxRetries: 2, timeout: 120_000 }) : null;
+// Функція Supabase має обмеження часу (~150 с), тому один запит до моделі не довше 125 с і без повторів.
+const client = KEY ? new Anthropic({ apiKey: KEY, maxRetries: 0, timeout: 125_000 }) : null;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -60,10 +61,12 @@ Deno.serve(async (req) => {
     await db.rpc("add_ai_tokens", { uid: user.id, inp: res.usage.input_tokens + (res.usage.cache_read_input_tokens || 0) + (res.usage.cache_creation_input_tokens || 0), outp: res.usage.output_tokens });
     return json({ content: res.content, stop_reason: res.stop_reason, stop_details: res.stop_details ?? null, model: res.model });
   } catch (e) {
+    console.error("ai-chat:", e instanceof Anthropic.APIError ? `${e.status ?? "-"} ${e.message}` : String(e));
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return json({ error: "timeout" }, 504);
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return json({ error: "bad_key" }, 502);
     if (e instanceof Anthropic.RateLimitError) return json({ error: "rate_limited" }, 429);
     if (e instanceof Anthropic.BadRequestError) return json({ error: "bad_request", detail: e.message }, 400);
-    if (e instanceof Anthropic.APIError) return json({ error: "upstream", status: e.status ?? null }, 502);
-    return json({ error: "upstream" }, 502);
+    if (e instanceof Anthropic.APIError) return json({ error: "upstream", status: e.status ?? null, detail: e.message }, 502);
+    return json({ error: "upstream", detail: String(e).slice(0, 300) }, 502);
   }
 });
