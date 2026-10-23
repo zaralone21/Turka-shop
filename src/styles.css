@@ -416,3 +416,4 @@ table.t .acts { white-space: nowrap; text-align: right; }
 .sec-h .muted, .sec-sub .muted { font-weight: 400; font-size: .85em; }
 .seg.multi { border: 0; gap: 6px; overflow: visible; }
 .seg.multi label { border: 1px solid var(--line-strong); border-radius: 8px; }
+.sec-chips .chip.zero:not(.on) { opacity: .55; }

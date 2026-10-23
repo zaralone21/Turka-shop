@@ -1,5 +1,5 @@
 import { REMINDER_STATUSES, REPEATS, fireAt } from './reminders.js';
-import { normalizeSections } from './sections.js';
+import { SECTIONS_REV, mergeDefaultSections, normalizeSections } from './sections.js';
 import { APP_ID, SCHEMA_VERSION, isNum, nowISO, parseNum, splitList, uid } from './utils.js';
 
 /* =====================================================================
@@ -33,6 +33,7 @@ export const Schema = (() => {
         budgetCategories: BUDGET_CATEGORIES.map(c => ({ ...c })),
         productCategories: [...PRODUCT_CATEGORIES],
         sections: normalizeSections(),
+        sectionsRev: SECTIONS_REV,
         breakeven: { fixed: '', margin: '', extra: '', avgCheck: '', days: '26' },
         ui: { showDoneTasks: false },
       },
@@ -94,7 +95,9 @@ export const Schema = (() => {
         totalBudget: numOrNull(s.totalBudget),
         budgetCategories: cats.filter(c => c && c.id && c.name).map(c => ({ ...c, id: str(c.id), name: str(c.name), builtin: !!c.builtin, refundable: !!c.refundable })),
         productCategories: Array.isArray(s.productCategories) ? strArr(s.productCategories) : base.settings.productCategories,
-        sections: normalizeSections(s.sections),
+        // Збережені розділи доповнюються новими типовими підрозділами один раз на версію
+        sections: Array.isArray(s.sections) && (Number(s.sectionsRev) || 1) < SECTIONS_REV ? mergeDefaultSections(normalizeSections(s.sections)) : normalizeSections(s.sections),
+        sectionsRev: SECTIONS_REV,
         breakeven: { ...base.settings.breakeven, ...(s.breakeven || {}) },
         ui: { ...base.settings.ui, ...(s.ui || {}) },
       },

@@ -42,7 +42,7 @@ export function productTable(list, showSupplier) {
   }).join('')}</tbody></table></div>`;
 }
 const count = n => `<span class="muted">${n}</span>`;
-const chip = (on, act, attrs, label, n) => `<button class="chip ${on ? 'on' : ''}" data-act="${act}" ${attrs}>${esc(label)} ${count(n)}</button>`;
+const chip = (on, act, attrs, label, n) => `<button class="chip ${on ? 'on' : ''} ${n ? '' : 'zero'}" data-act="${act}" ${attrs}>${esc(label)} ${count(n)}</button>`;
 VIEWS.products = () => {
   const d = D(); const q = UI.f.prodQ.trim().toLowerCase(); const sections = d.settings.sections;
   const order = sectionOrder(sections, d.products);
