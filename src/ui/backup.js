@@ -7,9 +7,10 @@ import { D, toast } from './shared.js';
 /* --- експорт / імпорт --- */
 export let downloadsApi = null;
 export function setDownloadsApi(api) { downloadsApi = api; }
-export async function exportJSON() {
-  const obj = Repo.exportObject(); const json = JSON.stringify(obj, null, 2);
-  const name = `turka-shop-backup-${todayISO()}${Repo.status.demo ? '-demo' : ''}.json`;
+/** Завантажує резервну копію. obj/suffix — для копії старих даних браузера перед перенесенням. */
+export async function exportJSON(obj = Repo.exportObject(), suffix = Repo.status.demo ? '-demo' : '') {
+  const json = JSON.stringify({ ...obj, exportedAt: obj.exportedAt || new Date().toISOString() }, null, 2);
+  const name = `turka-shop-backup-${todayISO()}${suffix}.json`;
   if (downloadsApi) {
     try { await downloadsApi.save({ filename: name, data: json }); toast('Файл резервної копії збережено'); return; }
     catch (e) { if (e && e.code === 'declined') { toast('Збереження скасовано'); return; } }
@@ -18,6 +19,8 @@ export async function exportJSON() {
     const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Резервну копію завантажено');
+    if (window.self === window.top) return;
   } catch {}
   showJSON(json, 'Якщо файл не завантажився, скопіюйте текст нижче й збережіть його у файл з розширенням .json.');
 }

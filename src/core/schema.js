@@ -1,3 +1,4 @@
+import { REMINDER_STATUSES, REPEATS, fireAt } from './reminders.js';
 import { APP_ID, SCHEMA_VERSION, isNum, nowISO, parseNum, splitList, uid } from './utils.js';
 
 /* =====================================================================
@@ -14,7 +15,12 @@ export const Schema = (() => {
   const SUPPLIER_STATUSES = { interested: 'Цікавий', contact: 'Зв’язатися', working: 'Працюємо', rejected: 'Не підійшов' };
   const TASK_STATUSES = { planned: 'Заплановано', in_progress: 'У роботі', done: 'Виконано' };
   const PRIORITIES = { high: 'Високий', medium: 'Середній', low: 'Низький' };
-  const COLLECTIONS = ['suppliers', 'products', 'notes', 'tasks', 'expenses'];
+  const PURCHASE_STATUSES = { planned: 'Заплановано', ordered: 'Замовлено', awaiting: 'Очікується доставка', received: 'Отримано', cancelled: 'Скасовано' };
+  const LINK_TYPES = { task: 'Завдання', supplier: 'Постачальник', purchase: 'Закупівля' };
+  const COLLECTIONS = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders', 'chats'];
+  /* Колекції, що є частиною робочих даних магазину (чати AI сюди не входять). */
+  const DATA_COLLECTIONS = COLLECTIONS.filter(k => k !== 'chats');
+  const LABELS = { suppliers: 'постачальники', products: 'товари', notes: 'нотатки', tasks: 'завдання', expenses: 'витрати', purchases: 'закупівлі', reminders: 'нагадування', chats: 'чати AI' };
 
   function empty() {
     const t = nowISO();
@@ -28,13 +34,14 @@ export const Schema = (() => {
         breakeven: { fixed: '', margin: '', extra: '', avgCheck: '', days: '26' },
         ui: { showDoneTasks: false },
       },
-      suppliers: [], products: [], notes: [], tasks: [], expenses: [],
+      suppliers: [], products: [], notes: [], tasks: [], expenses: [], purchases: [], reminders: [], chats: [],
     };
   }
 
   /* Міграції: ключ — версія, ДО якої мігруємо. Додавайте нові записи при зміні схеми. */
   const MIGRATIONS = {
-    // 2: d => { ...; d.schemaVersion = 2; return d; },
+    // v2: додано закупівлі, нагадування й чати AI. Старі дані не змінюються, нові списки порожні.
+    2: d => ({ ...d, purchases: d.purchases || [], reminders: d.reminders || [], chats: d.chats || [] }),
   };
   function migrate(d) {
     let v = Number(d.schemaVersion) || 1;
@@ -56,6 +63,13 @@ export const Schema = (() => {
     notes: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), body: str(x.body), tags: strArr(x.tags), pinned: !!x.pinned, supplierId: x.supplierId ? str(x.supplierId) : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     tasks: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), description: str(x.description), deadline: date(x.deadline), priority: pick(x.priority, PRIORITIES, 'medium'), status: pick(x.status, TASK_STATUSES, 'planned'), checklist: Array.isArray(x.checklist) ? x.checklist.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), text: str(i.text), done: !!i.done })).filter(i => i.text) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     expenses: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categoryId: str(x.categoryId) || 'other', planned: numOrNull(x.planned), paid: numOrNull(x.paid), comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    purchases: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), supplierId: x.supplierId ? str(x.supplierId) : null, status: pick(x.status, PURCHASE_STATUSES, 'planned'), expectedDate: date(x.expectedDate),
+      items: Array.isArray(x.items) ? x.items.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), productId: i.productId ? str(i.productId) : null, name: str(i.name), qty: numOrNull(i.qty), unitPrice: numOrNull(i.unitPrice) })).filter(i => i.name || i.productId) : [],
+      deliveryCost: numOrNull(x.deliveryCost), expenseId: x.expenseId ? str(x.expenseId) : null, comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    reminders: x => { const r = { ...x, id: str(x.id) || uid(), title: str(x.title), note: str(x.note), date: date(x.date), time: /^\d{2}:\d{2}$/.test(x.time || '') ? x.time : '09:00', repeat: pick(x.repeat, REPEATS, 'none'), status: pick(x.status, REMINDER_STATUSES, 'planned'),
+      snoozedUntil: x.snoozedUntil && !isNaN(new Date(x.snoozedUntil)) ? x.snoozedUntil : null, link: x.link && LINK_TYPES[x.link.type] && x.link.id ? { type: x.link.type, id: str(x.link.id) } : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) };
+      r.fireAt = fireAt(r); return r; },
+    chats: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title) || 'Розмова', messages: Array.isArray(x.messages) ? x.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant')) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
   };
 
   function normalize(d) {
@@ -80,7 +94,7 @@ export const Schema = (() => {
     const catIds = new Set(out.settings.budgetCategories.map(c => c.id));
     out.expenses.forEach(e => { if (!catIds.has(e.categoryId)) e.categoryId = 'other'; });
     const supIds = new Set(out.suppliers.map(s => s.id));
-    [...out.products, ...out.notes].forEach(r => { if (r.supplierId && !supIds.has(r.supplierId)) r.supplierId = null; });
+    [...out.products, ...out.notes, ...out.purchases].forEach(r => { if (r.supplierId && !supIds.has(r.supplierId)) r.supplierId = null; });
     return out;
   }
 
@@ -92,14 +106,14 @@ export const Schema = (() => {
     const v = Number(obj.schemaVersion);
     if (!Number.isInteger(v) || v < 1) errors.push('У файлі немає коректної версії структури даних.');
     else if (v > SCHEMA_VERSION) errors.push(`Файл створено новішою версією застосунку (структура v${v}, а ця версія підтримує до v${SCHEMA_VERSION}).`);
-    const required = { suppliers: 'name', products: 'name', notes: 'title', tasks: 'title', expenses: 'name' };
-    const labels = { suppliers: 'постачальники', products: 'товари', notes: 'нотатки', tasks: 'завдання', expenses: 'витрати' };
+    const required = { suppliers: 'name', products: 'name', tasks: 'title', expenses: 'name', purchases: 'title', reminders: 'title' };
+    const labels = LABELS;
     for (const k of COLLECTIONS) {
       if (obj[k] === undefined) continue;
       if (!Array.isArray(obj[k])) { errors.push(`Розділ «${labels[k]}» має бути списком.`); continue; }
       obj[k].forEach((x, i) => {
         if (!x || typeof x !== 'object') errors.push(`${labels[k]}: запис №${i + 1} пошкоджений.`);
-        else if (k !== 'notes' && !String(x[required[k]] ?? '').trim()) errors.push(`${labels[k]}: у записі №${i + 1} немає назви.`);
+        else if (required[k] && !String(x[required[k]] ?? '').trim()) errors.push(`${labels[k]}: у записі №${i + 1} немає назви.`);
       });
     }
     if (obj.settings !== undefined && (typeof obj.settings !== 'object' || obj.settings === null)) errors.push('Розділ налаштувань пошкоджений.');
@@ -109,5 +123,7 @@ export const Schema = (() => {
     return { ok: true, errors: [], data, counts, version: v };
   }
 
-  return { empty, migrate, normalize, validateImport, SUPPLIER_STATUSES, TASK_STATUSES, PRIORITIES, COLLECTIONS };
+  /** Нормалізує один запис колекції (для синхронізації з сервером). */
+  const normalizeRecord = (k, x) => N[k](x);
+  return { empty, migrate, normalize, normalizeRecord, validateImport, SUPPLIER_STATUSES, TASK_STATUSES, PRIORITIES, PURCHASE_STATUSES, LINK_TYPES, COLLECTIONS, DATA_COLLECTIONS, LABELS };
 })();

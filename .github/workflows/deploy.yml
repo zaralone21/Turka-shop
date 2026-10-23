@@ -13,11 +13,19 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,14 +34,114 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Перевірка бази (правила доступу, захист від дублів)
+        run: scripts/test-sql.sh
+        env:
+          PGURL: postgres://postgres:postgres@localhost:5432/postgres
+
+  # Сервер: база, серверні функції, секрети, планувальник нагадувань.
+  # Виконується, лише якщо в репозиторії задано секрети Supabase (див. README).
+  backend:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.keys.outputs.url }}
+      anon: ${{ steps.keys.outputs.anon }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_PROJECT_REF" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Секрети Supabase не задані — сайт публікується без сервера (дані в браузері)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.enabled == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.check.outputs.enabled == 'true'
+        run: npm ci
+      - name: База даних
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          npx supabase db push --password "$SUPABASE_DB_PASSWORD" --yes
+      - name: Секрети серверних функцій
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          CRON_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$CRON_SECRET"
+          echo "CRON_SECRET=$CRON_SECRET" >> "$RUNNER_TEMP/fn.env"
+          # Ключі VAPID створюються один раз: якщо їх змінити, старі підписки на push перестануть працювати.
+          if ! npx supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" | grep -q VAPID_PRIVATE_KEY; then
+            KEYS=$(npx web-push generate-vapid-keys --json)
+            PRIV=$(echo "$KEYS" | jq -r .privateKey); echo "::add-mask::$PRIV"
+            echo "VAPID_PUBLIC_KEY=$(echo "$KEYS" | jq -r .publicKey)" >> "$RUNNER_TEMP/fn.env"
+            echo "VAPID_PRIVATE_KEY=$PRIV" >> "$RUNNER_TEMP/fn.env"
+            echo "VAPID_SUBJECT=https://github.com/${{ github.repository }}" >> "$RUNNER_TEMP/fn.env"
+          fi
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> "$RUNNER_TEMP/fn.env"; fi
+          npx supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$RUNNER_TEMP/fn.env"
+          # Той самий секрет — у Vault бази, щоб планувальник міг викликати функцію нагадувань.
+          jq -n --arg q "select public.set_app_secret('project_url', 'https://$SUPABASE_PROJECT_REF.supabase.co'); select public.set_app_secret('cron_secret', '$CRON_SECRET');" '{query: $q}' > "$RUNNER_TEMP/q.json"
+          curl -fsS -X POST "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @"$RUNNER_TEMP/q.json" > /dev/null
+          rm -f "$RUNNER_TEMP/fn.env" "$RUNNER_TEMP/q.json"
+      - name: Серверні функції
+        if: steps.check.outputs.enabled == 'true'
+        run: npx supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
+      - name: Адреса сайту для листів входу
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SITE="https://$OWNER.github.io/${{ github.event.repository.name }}/"
+          jq -n --arg s "$SITE" '{site_url: $s, uri_allow_list: ($s + "**")}' > "$RUNNER_TEMP/auth.json"
+          curl -fsS -X PATCH "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @"$RUNNER_TEMP/auth.json" > /dev/null
+      - id: keys
+        name: Публічна адреса й ключ для сайту
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          KEYS=$(curl -fsS "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/api-keys" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          ANON=$(echo "$KEYS" | jq -r '([.[] | select(.type == "publishable") | .api_key] + [.[] | select(.name == "anon") | .api_key]) | map(select(. != null and (startswith("sb_publishable_") or startswith("eyJ")))) | first // empty')
+          if [ -z "$ANON" ]; then echo "::error::Не вдалося отримати публічний ключ проєкту"; exit 1; fi
+          echo "url=https://$SUPABASE_PROJECT_REF.supabase.co" >> "$GITHUB_OUTPUT"
+          echo "anon=$ANON" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [test, backend]
+    if: always() && needs.test.result == 'success' && (needs.backend.result == 'success' || needs.backend.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run build
+        env:
+          # Публічні значення (не секрети): адреса проєкту й публічний ключ. Доступ до даних обмежують правила бази.
+          VITE_SUPABASE_URL: ${{ needs.backend.outputs.url }}
+          VITE_SUPABASE_ANON_KEY: ${{ needs.backend.outputs.anon }}
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
         with:
           path: dist
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: always() && github.event_name != 'pull_request' && needs.build.result == 'success'
     needs: build
     runs-on: ubuntu-latest
     environment:
