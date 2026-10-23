@@ -45,6 +45,24 @@ function syncBadge() {
   return `<div class="sync" title="${esc(Cloud.user?.email || '')}"><i class="dot ${cls}"></i>${txt}</div>`;
 }
 
+/* Сторінка перемальовується після кожної зміни даних (зокрема з інших пристроїв і після збереження на сервер).
+   Поле, в якому людина саме пише, після цього має лишитися з тим самим текстом, фокусом і курсором. */
+function editingState() {
+  const el = document.activeElement;
+  if (!el || !el.id || !root.contains(el) || !/^(INPUT|TEXTAREA)$/.test(el.tagName) || /^(file|checkbox|radio)$/.test(el.type)) return null;
+  let start = null, end = null; try { start = el.selectionStart; end = el.selectionEnd; } catch {}
+  return { id: el.id, value: el.value, start, end, scroll: el.scrollTop };
+}
+function restoreEditing(k) {
+  if (!k) return;
+  const el = document.getElementById(k.id);
+  if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName) || el.disabled) return;
+  if (el.value !== k.value) { el.value = k.value; el.dispatchEvent(new Event('input', { bubbles: false })); }
+  if (document.activeElement !== el) el.focus({ preventScroll: true });
+  try { if (k.start !== null) el.setSelectionRange(k.start, k.end); } catch {}
+  el.scrollTop = k.scroll;
+}
+
 export function render() {
   if (!Repo.data) return;
   const d = D(); const openTasks = d.tasks.filter(t => t.status !== 'done'); const overdue = openTasks.filter(isOverdue).length;
@@ -60,6 +78,7 @@ export function render() {
     return `${head}<button data-nav="${id}" class="${UI.page === id ? 'on' : ''}" ${UI.page === id ? 'aria-current="page"' : ''}>${svg(id)}<span class="lbl">${label}</span>${c}</button>`;
   }).join('');
   const scroll = window.scrollY;
+  const keep = editingState();
   const showFab = FAB_ACTION[UI.page] || UI.page === 'home';
   root.innerHTML = `
   <div class="app">
@@ -84,6 +103,7 @@ export function render() {
   ${UI.aiOpen && UI.page !== 'ai' ? AI.drawerHtml() : ''}`;
   if (UI.keepScroll) window.scrollTo(0, scroll); UI.keepScroll = true;
   AI.afterRender();
+  restoreEditing(keep);
   hydratePhotos(root);
 }
 export function banners() {

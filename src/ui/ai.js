@@ -232,7 +232,10 @@ export const AI = {
     if (log) log.scrollTop = log.scrollHeight;
     if (!ta) return;
     ta.value = S.draft;
-    ta.oninput = () => { S.draft = ta.value; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; };
+    // Поле росте разом із текстом; прокрутка з'являється лише для дуже довгого тексту (більше ніж ~40% екрана).
+    const fit = () => { const max = Math.max(160, Math.round(window.innerHeight * 0.4)); ta.style.height = 'auto'; const h = ta.scrollHeight + 2; ta.style.height = Math.min(h, max) + 'px'; ta.style.overflowY = h > max ? 'auto' : 'hidden'; };
+    ta.oninput = () => { S.draft = ta.value; fit(); };
+    fit();
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(ta.value); } };
     if (S.focus && !ta.disabled) { ta.focus(); S.focus = false; }
   },
