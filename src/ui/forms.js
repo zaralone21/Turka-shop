@@ -1,6 +1,7 @@
 import { Calc } from '../core/calc.js';
 import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
+import { planRegroup, sectionsToText, textToSections } from '../core/sections.js';
 import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core/reminders.js';
 import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, splitList, todayISO, uid, uniq } from '../core/utils.js';
 import { ACTIONS } from './events.js';
@@ -12,11 +13,13 @@ import { render } from './shell.js';
 /* --- постачальник --- */
 export function supplierForm(id) {
   const s = id ? Repo.get('suppliers', id) : null; const v = s || { status: 'interested', checkedAt: todayISO(), categories: [] };
-  const catList = uniq([...D().settings.productCategories, ...D().suppliers.flatMap(x => x.categories)]);
+  const secNames = D().settings.sections.map(x => x.name);
+  const other = (v.categories || []).filter(c => !secNames.includes(c));
   formModal({
     title: s ? 'Редагувати постачальника' : 'Новий постачальник',
     fields: `${F.text('name', 'Назва', v.name, { req: true, full: true })}
-      ${F.text('categories', 'Категорії товарів', (v.categories || []).join(', '), { full: true, hint: 'Через кому. Наприклад: ' + catList.slice(0, 3).join(', ') })}
+      <div class="field full"><span class="lbl">Розділи</span><div class="seg multi">${secNames.map(c => `<label><input type="checkbox" name="sec" value="${esc(c)}" ${(v.categories || []).includes(c) ? 'checked' : ''}>${esc(c)}</label>`).join('')}</div></div>
+      ${F.text('categories', 'Інші категорії', other.join(', '), { full: true, hint: 'Необов’язково, через кому. Розділи можна змінити на сторінці «Товари та ціни».' })}
       ${F.select('status', 'Статус', v.status, Object.entries(Schema.SUPPLIER_STATUSES))}
       ${F.date('checkedAt', 'Дата останньої перевірки інформації', v.checkedAt)}
       ${F.text('instagram', 'Instagram', v.instagram, { ph: '@назва або посилання' })}
@@ -31,7 +34,7 @@ export function supplierForm(id) {
       ${F.area('defectTerms', 'Обмін браку', v.defectTerms, { rows: 2 })}
       ${F.area('notes', 'Нотатки', v.notes)}`,
     read: fd => { const errors = {}; if (!g(fd, 'name')) errors.name = 'Вкажіть назву.';
-      return { errors, values: { name: g(fd, 'name'), categories: splitList(fd.get('categories')), status: g(fd, 'status'), checkedAt: dateField(fd, 'checkedAt', errors), instagram: g(fd, 'instagram'), website: g(fd, 'website'), phone: g(fd, 'phone'), messenger: g(fd, 'messenger'), contactPerson: g(fd, 'contactPerson'), city: g(fd, 'city'), minOrder: g(fd, 'minOrder'), paymentTerms: g(fd, 'paymentTerms'), deliveryTerms: g(fd, 'deliveryTerms'), defectTerms: g(fd, 'defectTerms'), notes: g(fd, 'notes') } }; },
+      return { errors, values: { name: g(fd, 'name'), categories: uniq([...fd.getAll('sec'), ...splitList(fd.get('categories'))]), status: g(fd, 'status'), checkedAt: dateField(fd, 'checkedAt', errors), instagram: g(fd, 'instagram'), website: g(fd, 'website'), phone: g(fd, 'phone'), messenger: g(fd, 'messenger'), contactPerson: g(fd, 'contactPerson'), city: g(fd, 'city'), minOrder: g(fd, 'minOrder'), paymentTerms: g(fd, 'paymentTerms'), deliveryTerms: g(fd, 'deliveryTerms'), defectTerms: g(fd, 'defectTerms'), notes: g(fd, 'notes') } }; },
     onDelete: s ? () => deleteSupplier(s.id) : null,
     save: async vals => { if (s) { await Repo.update('suppliers', s.id, vals); toast('Постачальника збережено'); } else { const r = await Repo.create('suppliers', vals); toast('Постачальника додано'); UI.page = 'suppliers'; UI.supplierId = r.id; UI.keepScroll = false; render(); } },
   });
@@ -46,16 +49,59 @@ export async function deleteSupplier(id) {
   }
 }
 
+/* --- розділи товарів --- */
+export function sectionsForm() {
+  const cur = D().settings.sections;
+  formModal({
+    title: 'Розділи товарів',
+    fields: `${F.area('sections', 'Розділи й підрозділи', sectionsToText(cur), { rows: 10, hint: 'Кожен розділ з нового рядка. Підрозділи — після двокрапки, через кому. Наприклад: «Шкарпетки: Махрові, Стрейч, Без резинки».' })}
+      <p class="small muted full" style="margin:0">Товари не видаляються: якщо прибрати розділ, його товари лишаться й показуватимуться окремою групою.</p>`,
+    read: fd => { const list = textToSections(fd.get('sections')); return list.length ? { errors: {}, values: list } : { errors: { sections: 'Додайте хоча б один розділ.' } }; },
+    save: async list => {
+      // Перейменування розділу в тому самому рядку переносить і його товари та постачальників
+      const renames = new Map();
+      cur.forEach((s, i) => { const n = list[i]; if (n && n.name !== s.name && !cur.some(x => x.name === n.name) && !list.some(x => x.name === s.name)) renames.set(s.name, n.name); });
+      await Repo.setSettings({ sections: list });
+      if (renames.size) {
+        await Repo.updateMany('products', D().products.filter(p => renames.has(p.category)).map(p => ({ id: p.id, fields: { category: renames.get(p.category) } })));
+        await Repo.updateMany('suppliers', D().suppliers.filter(s => s.categories.some(c => renames.has(c))).map(s => ({ id: s.id, fields: { categories: uniq(s.categories.map(c => renames.get(c) || c)) } })));
+      }
+      toast('Розділи збережено');
+    },
+  });
+}
+/** Автоматичне розкладання по розділах: показує точний перелік і змінює лише після підтвердження. */
+export async function regroupDialog() {
+  const d = D(); const plan = planRegroup(d);
+  if (!plan.products.length && !plan.suppliers.length) { toast('Усе вже розкладено по розділах'); return; }
+  const lbl = t => [t.category, t.subcategory].filter(Boolean).join(' › ');
+  const rows = [
+    ...plan.products.map(x => `<li>${esc(x.name)}: ${x.from ? `<span class="muted">${esc(x.from)}</span> → ` : ''}<b>${esc(lbl(x.to))}</b></li>`),
+    ...plan.suppliers.map(x => `<li>Постачальник ${esc(x.name)}: <b>${esc(x.to.categories.join(', '))}</b></li>`),
+  ];
+  const ok = await confirmDialog({ title: 'Розкласти по розділах?', ok: 'Розкласти', danger: false,
+    text: `<p style="margin-top:0">Розділ визначено за назвою товару чи старою категорією. Буде змінено ${rows.length} ${plural(rows.length, 'запис', 'записи', 'записів')}:</p><ul class="small" style="max-height:45vh;overflow:auto;padding-left:18px">${rows.join('')}</ul>` });
+  if (!ok) return;
+  const prev = { products: plan.products.map(x => ({ id: x.id, fields: { category: Repo.get('products', x.id).category, subcategory: Repo.get('products', x.id).subcategory } })),
+    suppliers: plan.suppliers.map(x => ({ id: x.id, fields: { categories: Repo.get('suppliers', x.id).categories } })) };
+  await Repo.updateMany('products', plan.products.map(x => ({ id: x.id, fields: x.to })));
+  await Repo.updateMany('suppliers', plan.suppliers.map(x => ({ id: x.id, fields: x.to })));
+  toast('Розкладено по розділах', null, async () => { await Repo.updateMany('products', prev.products); await Repo.updateMany('suppliers', prev.suppliers); toast('Повернуто як було'); });
+}
+
 /* --- товар --- */
 export function productForm(id, presetSupplier) {
   const p = id ? Repo.get('products', id) : null;
   const v = p || { priceType: 'unit', priceDate: todayISO(), supplierId: presetSupplier || '' };
-  const cats = uniq([...D().settings.productCategories, ...D().products.map(x => x.category).filter(Boolean)]);
+  const sections = D().settings.sections;
+  const catOpts = [['', '— без розділу —'], ...sections.map(x => [x.name, x.name]), ...(v.category && !sections.some(x => x.name === v.category) ? [[v.category, v.category]] : [])];
+  const subsOf = c => uniq([...(sections.find(x => x.name === c)?.subs || []), ...D().products.filter(x => x.category === c).map(x => x.subcategory).filter(Boolean)]);
   const ph = { kept: [...(p?.photos || [])], removed: [], pending: [] };
   formModal({
     title: p ? 'Редагувати товар' : 'Новий товар',
     fields: `${F.text('name', 'Назва', v.name, { req: true, full: true })}
-      ${F.text('category', 'Категорія', v.category, { list: 'cat-list' })}<datalist id="cat-list">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      ${F.select('category', 'Розділ', v.category || '', catOpts)}
+      ${F.text('subcategory', 'Підрозділ', v.subcategory, { list: 'sub-list', ph: 'Напр.: махрові' })}<datalist id="sub-list"></datalist>
       ${F.text('sku', 'Артикул', v.sku)}
       ${F.select('supplierId', 'Постачальник', v.supplierId || '', supplierOptions())}
       ${F.text('url', 'Посилання на товар', v.url, { ph: 'https://…' })}
@@ -73,6 +119,8 @@ export function productForm(id, presetSupplier) {
     onMount: m => {
       const form = m.querySelector('form');
       wirePhotoEditor(m.querySelector('#photo-edit'), ph);
+      const subList = () => { m.querySelector('#sub-list').innerHTML = subsOf(form.category.value).map(x => `<option value="${esc(x)}">`).join(''); };
+      form.category.addEventListener('change', subList); subList();
       const upd = () => {
         const type = form.querySelector('[name=priceType]:checked').value;
         m.querySelector('#pack-wrap').hidden = type !== 'pack';
@@ -89,7 +137,7 @@ export function productForm(id, presetSupplier) {
       let packQty = null;
       if (type === 'pack') { packQty = parseNum(fd.get('packQty')); if (packQty === null) errors.packQty = 'Вкажіть кількість одиниць.'; else if (Number.isNaN(packQty) || packQty <= 0) { errors.packQty = 'Має бути число більше нуля.'; packQty = null; } }
       const retailPrice = moneyField(fd, 'retailPrice', errors);
-      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), priceType: type, purchasePrice, packQty, retailPrice, priceDate: dateField(fd, 'priceDate', errors), comment: g(fd, 'comment') } };
+      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), priceType: type, purchasePrice, packQty, retailPrice, priceDate: dateField(fd, 'priceDate', errors), comment: g(fd, 'comment') } };
     },
     onDelete: p ? () => ACTIONS['del-product']({ dataset: { id: p.id } }) : null,
     save: async vals => {

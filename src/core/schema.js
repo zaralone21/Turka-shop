@@ -1,4 +1,5 @@
 import { REMINDER_STATUSES, REPEATS, fireAt } from './reminders.js';
+import { normalizeSections } from './sections.js';
 import { APP_ID, SCHEMA_VERSION, isNum, nowISO, parseNum, splitList, uid } from './utils.js';
 
 /* =====================================================================
@@ -31,6 +32,7 @@ export const Schema = (() => {
         totalBudget: null,
         budgetCategories: BUDGET_CATEGORIES.map(c => ({ ...c })),
         productCategories: [...PRODUCT_CATEGORIES],
+        sections: normalizeSections(),
         breakeven: { fixed: '', margin: '', extra: '', avgCheck: '', days: '26' },
         ui: { showDoneTasks: false },
       },
@@ -67,7 +69,7 @@ export const Schema = (() => {
   /* Нормалізатори зберігають невідомі поля (...x), щоб нові версії не втрачали дані. */
   const N = {
     suppliers: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categories: strArr(x.categories), instagram: str(x.instagram), website: str(x.website), phone: str(x.phone), messenger: str(x.messenger), contactPerson: str(x.contactPerson), city: str(x.city), minOrder: str(x.minOrder), paymentTerms: str(x.paymentTerms), deliveryTerms: str(x.deliveryTerms), defectTerms: str(x.defectTerms), notes: str(x.notes), status: pick(x.status, SUPPLIER_STATUSES, 'interested'), checkedAt: date(x.checkedAt), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
-    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), subcategory: str(x.subcategory), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     notes: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), body: str(x.body), tags: strArr(x.tags), pinned: !!x.pinned, supplierId: x.supplierId ? str(x.supplierId) : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     tasks: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), description: str(x.description), deadline: date(x.deadline), priority: pick(x.priority, PRIORITIES, 'medium'), status: pick(x.status, TASK_STATUSES, 'planned'), checklist: Array.isArray(x.checklist) ? x.checklist.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), text: str(i.text), done: !!i.done })).filter(i => i.text) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     expenses: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categoryId: str(x.categoryId) || 'other', planned: numOrNull(x.planned), paid: numOrNull(x.paid), comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
@@ -92,6 +94,7 @@ export const Schema = (() => {
         totalBudget: numOrNull(s.totalBudget),
         budgetCategories: cats.filter(c => c && c.id && c.name).map(c => ({ ...c, id: str(c.id), name: str(c.name), builtin: !!c.builtin, refundable: !!c.refundable })),
         productCategories: Array.isArray(s.productCategories) ? strArr(s.productCategories) : base.settings.productCategories,
+        sections: normalizeSections(s.sections),
         breakeven: { ...base.settings.breakeven, ...(s.breakeven || {}) },
         ui: { ...base.settings.ui, ...(s.ui || {}) },
       },

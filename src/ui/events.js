@@ -5,7 +5,7 @@ import { clearLegacy, migrationDialog, openData } from './session.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
-import { budgetCatsModal, deleteSupplier, expenseForm, noteForm, openGallery, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
@@ -38,6 +38,12 @@ export const ACTIONS = {
   'del-note': async el => { const n = Repo.get('notes', el.dataset.id); if (await confirmDialog({ title: 'Видалити нотатку?', text: `<p style="margin:0">«${esc(n.title || 'Без заголовка')}» буде видалено.</p>` })) { await Repo.remove('notes', n.id); toast('Нотатку видалено'); } },
   'pin-note': async el => { const n = Repo.get('notes', el.dataset.id); await Repo.update('notes', n.id, { pinned: !n.pinned }); },
   'note-tag': el => { UI.f.noteTag = el.dataset.tag; render(); },
+  'prod-cat': el => { UI.f.prodCat = el.dataset.v; UI.f.prodSub = ''; render(); },
+  'prod-sub': el => { UI.f.prodSub = el.dataset.v; render(); },
+  'sup-cat': el => { UI.f.supCat = el.dataset.v; render(); },
+  'edit-sections': () => sectionsForm(),
+  'regroup': () => regroupDialog(),
+  'regroup-hide': () => { UI.regroupHidden = true; render(); },
   'add-task': () => taskForm(), 'edit-task': el => taskForm(el.dataset.id),
   'del-task': async el => { const t = Repo.get('tasks', el.dataset.id); if (await confirmDialog({ title: 'Видалити завдання?', text: `<p style="margin:0">«${esc(t.title)}» буде видалено разом із чеклістом.</p>` })) { await Repo.remove('tasks', t.id); toast('Завдання видалено'); } },
   'task-done': async el => { await Repo.update('tasks', el.dataset.id, { status: 'done' }); toast('Завдання виконано'); },

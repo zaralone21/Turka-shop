@@ -404,3 +404,15 @@ table.t .acts { white-space: nowrap; text-align: right; }
 .gallery-nav { display: flex; gap: 12px; align-items: center; }
 .ai-photos { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .ai-photos img { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+
+/* Розділи товарів і постачальників */
+.sec-chips { margin: 2px 0 4px; }
+.sec-chips .chip { font-size: .85rem; padding: 5px 10px; }
+.sec-chips.sub .chip { font-size: .8rem; padding: 3px 9px; }
+.sec-chips .chip .muted { font-size: .75em; margin-left: 2px; }
+.sec-group { display: flex; flex-direction: column; gap: 8px; }
+.sec-h { font-size: 1.1rem; margin: 10px 0 0; padding-bottom: 6px; border-bottom: 1px solid var(--line-strong); }
+.sec-sub { font-size: .95rem; margin: 6px 0 0; color: var(--muted); font-weight: 600; }
+.sec-h .muted, .sec-sub .muted { font-weight: 400; font-size: .85em; }
+.seg.multi { border: 0; gap: 6px; overflow: visible; }
+.seg.multi label { border: 1px solid var(--line-strong); border-radius: 8px; }
