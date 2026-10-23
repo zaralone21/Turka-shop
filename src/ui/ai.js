@@ -60,7 +60,7 @@ export async function refreshStatus(force) {
 const ERRORS = {
   not_configured: 'Потрібне підключення AI: на сервері не задано ключ.', daily_limit: 'Денний ліміт запитів до AI вичерпано. Спробуйте завтра.',
   bad_key: 'Сервер AI відхилив ключ. Перевірте ANTHROPIC_API_KEY у Supabase.', rate_limited: 'AI зараз перевантажений. Спробуйте за хвилину.',
-  too_long: 'Розмова завелика. Почніть нову.', unauthorized: 'Сесія завершилась. Увійдіть знову.',
+  too_long: 'Розмова завелика. Почніть нову.', timeout: 'AI працював над запитом задовго й не встиг відповісти. Спробуйте розбити запит на менші, наприклад спершу одна категорія товарів.', unauthorized: 'Сесія завершилась. Увійдіть знову.',
 };
 async function callModel(messages) {
   let r;
@@ -69,7 +69,10 @@ async function callModel(messages) {
   let j = {}; try { j = await r.json(); } catch {}
   if (!r.ok) {
     if (r.status === 404 || j.error === 'not_configured') { S.state = 'not_configured'; }
-    throw new AIError(j.error || 'upstream', ERRORS[j.error] || (r.status === 404 ? ERRORS.not_configured : 'Сервер AI повернув помилку. Спробуйте ще раз.'));
+    // Відповідь без JSON (502/504/546) означає, що функцію зупинили за часом.
+    if (!j.error && r.status >= 500) j.error = 'timeout';
+    const detail = j.detail ? ` (${String(j.detail).slice(0, 200)})` : '';
+    throw new AIError(j.error || 'upstream', ERRORS[j.error] || (r.status === 404 ? ERRORS.not_configured : `Сервер AI повернув помилку${detail}. Спробуйте ще раз.`));
   }
   return j;
 }
