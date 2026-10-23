@@ -14,8 +14,8 @@ const MAX_BODY = 2_000_000;
 // Пошук у мережі й читання сайтів (виконуються на серверах Anthropic). AI_WEB=off вимикає.
 const WEB = (Deno.env.get("AI_WEB") || "on") !== "off";
 const WEB_TOOLS = WEB ? [
-  { type: "web_search_20260209", name: "web_search", max_uses: 3 },
-  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3, max_content_tokens: 8000, citations: { enabled: true } },
+  { type: "web_search_20260209", name: "web_search", max_uses: 4 },
+  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 6, max_content_tokens: 8000, citations: { enabled: true } },
 ] : [];
 
 // Функція Supabase має обмеження часу (~150 с), тому один запит до моделі не довше 125 с і без повторів.
