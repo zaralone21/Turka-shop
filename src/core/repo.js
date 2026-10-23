@@ -65,6 +65,8 @@ export function createRepo() {
     get: (name, id) => data[name].find(x => x.id === id) || null,
     async create(name, fields) { const t = nowISO(); const rec = Schema.normalizeRecord(name, { ...fields, id: fields.id || uid(), createdAt: t, updatedAt: t }); await mutate(d => d[name].push(rec)); return rec; },
     async update(name, id, fields) { await mutate(d => { const i = d[name].findIndex(x => x.id === id); if (i >= 0) d[name][i] = Schema.normalizeRecord(name, { ...d[name][i], ...fields, updatedAt: nowISO() }); }); },
+    /** Кілька змін однієї колекції одним збереженням: [{id, fields}]. */
+    async updateMany(name, changes) { const t = nowISO(); await mutate(d => { for (const c of changes) { const i = d[name].findIndex(x => x.id === c.id); if (i >= 0) d[name][i] = Schema.normalizeRecord(name, { ...d[name][i], ...c.fields, updatedAt: t }); } }); },
     /** Повертає запис до попереднього стану (для «Скасувати»). Якщо prev = null — видаляє створений запис. */
     async restore(name, id, prev) { await mutate(d => { d[name] = d[name].filter(x => x.id !== id); if (prev) d[name].push(Schema.normalizeRecord(name, { ...prev, updatedAt: nowISO() })); }); },
     async remove(name, id) { await mutate(d => { d[name] = d[name].filter(x => x.id !== id); }); },

@@ -15,7 +15,7 @@ export const PAGES = [
 export const NAV_GROUPS = { work: 'Робота', shop: 'Магазин', money: 'Гроші', sys: '' };
 export const UI = {
   page: 'home', supplierId: null, keepScroll: true, aiOpen: false, chatId: null,
-  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSup: '', noteQ: '', noteTag: '', taskStatus: '', purStatus: '', remShowDone: false },
+  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', supCat: '', noteQ: '', noteTag: '', taskStatus: '', purStatus: '', remShowDone: false },
 };
 export const root = document.getElementById('root');
 export const D = () => Repo.data;

@@ -24,7 +24,7 @@ const isDate = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !i
 function brief(d, col, r) {
   switch (col) {
     case 'suppliers': return clean({ id: r.id, name: r.name, status: Schema.SUPPLIER_STATUSES[r.status], city: r.city, categories: r.categories, contacts: [r.phone, r.messenger, r.instagram, r.website].filter(Boolean).join(', ') || null, checkedAt: r.checkedAt || null });
-    case 'products': { const c = Calc.unitCost(r); return clean({ id: r.id, name: r.name, category: r.category, supplier: nameOf(d, 'suppliers', r.supplierId), supplierId: r.supplierId, unitCost: money(c), retailPrice: r.retailPrice, priceDate: r.priceDate || null, priceStale: r.priceDate ? ageDays(r.priceDate) > STALE_PRICE_DAYS : null }); }
+    case 'products': { const c = Calc.unitCost(r); return clean({ id: r.id, name: r.name, category: r.category, subcategory: r.subcategory, supplier: nameOf(d, 'suppliers', r.supplierId), supplierId: r.supplierId, unitCost: money(c), retailPrice: r.retailPrice, priceDate: r.priceDate || null, priceStale: r.priceDate ? ageDays(r.priceDate) > STALE_PRICE_DAYS : null }); }
     case 'notes': return clean({ id: r.id, title: r.title || 'Без заголовка', excerpt: cut(r.body, 200), supplierId: r.supplierId, updatedAt: r.updatedAt.slice(0, 10) });
     case 'tasks': return clean({ id: r.id, title: r.title, status: Schema.TASK_STATUSES[r.status], deadline: r.deadline || null, overdue: r.status !== 'done' && r.deadline ? daysFromToday(r.deadline) < 0 : null, priority: Schema.PRIORITIES[r.priority] });
     case 'expenses': return clean({ id: r.id, name: r.name, category: d.settings.budgetCategories.find(c => c.id === r.categoryId)?.name, planned: r.planned, paid: r.paid });
@@ -42,6 +42,7 @@ function overview(d, now) {
   const b = Calc.budget(d); const p = Calc.purchases(d);
   return {
     now: kyivParts(now), counts: Object.fromEntries(DATA.map(k => [k, d[k].length])),
+    sections: d.settings.sections,
     tasks: {
       overdue: open.filter(t => t.deadline && t.deadline < today).map(t => brief(d, 'tasks', t)),
       today: open.filter(t => t.deadline === today).map(t => brief(d, 'tasks', t)),
@@ -122,7 +123,7 @@ function getRecord(d, col, id) {
 /** Порівняння пропозицій: ціни за одиницю з Calc.unitCost, давність цін і бракуючі поля. */
 export function compareOffers(d, query) {
   const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean); need(words.length, 'Порожній запит');
-  const items = d.products.filter(p => { const hay = [p.name, p.category, p.comment, p.sku].join(' ').toLowerCase(); return words.every(w => hay.includes(w)); }).map(p => {
+  const items = d.products.filter(p => { const hay = [p.name, p.category, p.subcategory, p.comment, p.sku].join(' ').toLowerCase(); return words.every(w => hay.includes(w)); }).map(p => {
     const s = d.suppliers.find(x => x.id === p.supplierId) || null; const unit = Calc.unitCost(p);
     const missing = [];
     if (unit === null) missing.push(p.priceType === 'pack' && isNum(p.purchasePrice) ? 'кількість в упаковці' : 'закупівельна ціна');

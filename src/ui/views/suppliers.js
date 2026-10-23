@@ -1,5 +1,6 @@
 import { Repo } from '../../core/repo.js';
 import { Schema } from '../../core/schema.js';
+import { NO_SECTION } from '../../core/sections.js';
 import { byText, daysFromToday, esc, fmtDate, fmtKyiv, fmtMoney, plural } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, ext, igLink, statusPill } from '../shared.js';
 import { productTable } from './products.js';
@@ -11,7 +12,12 @@ import { fireAt } from '../../core/reminders.js';
 VIEWS.suppliers = () => {
   if (UI.supplierId) { const s = Repo.get('suppliers', UI.supplierId); if (s) return supplierDetail(s); UI.supplierId = null; }
   const d = D(); const q = UI.f.supQ.trim().toLowerCase();
-  const list = d.suppliers.filter(s => (!UI.f.supStatus || s.status === UI.f.supStatus) && (!q || [s.name, s.city, s.contactPerson, s.instagram, s.notes, ...s.categories].join(' ').toLowerCase().includes(q))).sort((a, b) => byText(a.name, b.name));
+  const secs = [...new Set([...d.settings.sections.map(s => s.name), ...d.suppliers.flatMap(s => s.categories)])];
+  if (UI.f.supCat && UI.f.supCat !== NO_SECTION && !secs.includes(UI.f.supCat)) UI.f.supCat = '';
+  const base = d.suppliers.filter(s => (!UI.f.supStatus || s.status === UI.f.supStatus) && (!q || [s.name, s.city, s.contactPerson, s.instagram, s.notes, ...s.categories].join(' ').toLowerCase().includes(q))).sort((a, b) => byText(a.name, b.name));
+  const list = UI.f.supCat === NO_SECTION ? base.filter(s => !s.categories.length) : UI.f.supCat ? base.filter(s => s.categories.includes(UI.f.supCat)) : base;
+  const chip = (v, label, n) => `<button class="chip ${UI.f.supCat === v ? 'on' : ''}" data-act="sup-cat" data-v="${esc(v)}">${esc(label)} <span class="muted">${n}</span></button>`;
+  const noCat = base.filter(s => !s.categories.length).length;
   const head = `<div class="page-head"><div><h1>Постачальники</h1><p>${d.suppliers.length} ${plural(d.suppliers.length, 'постачальник', 'постачальники', 'постачальників')}</p></div><button class="btn primary hide-m" data-act="add-supplier">+ Додати постачальника</button></div>`;
   if (!d.suppliers.length) return head + emptyState('Тут будуть картки постачальників з контактами, умовами та цінами на товари.', 'add-supplier', 'Додати першого постачальника');
   return head + `
@@ -19,6 +25,7 @@ VIEWS.suppliers = () => {
     <input class="input grow" id="f-supQ" data-filter="supQ" placeholder="Пошук: назва, місто, категорія…" value="${esc(UI.f.supQ)}" aria-label="Пошук постачальників">
     <select class="input" id="f-supStatus" data-filter="supStatus" aria-label="Статус"><option value="">Усі статуси</option>${Object.entries(Schema.SUPPLIER_STATUSES).map(([k, v]) => `<option value="${k}" ${UI.f.supStatus === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
   </div>
+  <div class="chips sec-chips" role="group" aria-label="Розділи">${chip('', 'Усі', base.length)}${secs.map(c => chip(c, c, base.filter(s => s.categories.includes(c)).length)).join('')}${noCat ? chip(NO_SECTION, 'Без розділу', noCat) : ''}</div>
   ${list.length ? `<div class="grid-cards">${list.map(supplierCard).join('')}</div>` : '<p class="muted">Нічого не знайдено за цими умовами.</p>'}`;
 };
 export function supplierCard(s) {
