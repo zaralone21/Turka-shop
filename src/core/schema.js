@@ -54,12 +54,20 @@ export const Schema = (() => {
   const date = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : '';
   const ts = v => (typeof v === 'string' && !isNaN(new Date(v))) ? v : nowISO();
   const strArr = v => Array.isArray(v) ? v.map(str).map(s => s.trim()).filter(Boolean) : splitList(v);
+  /* Фото товару: шлях у сховищі сервера або зменшене зображення data:image/… у самому записі. */
+  const PHOTO_DATA = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+  const photos = v => Array.isArray(v) ? v.filter(p => p && typeof p === 'object').map(p => {
+    const id = str(p.id) || uid();
+    if (typeof p.path === 'string' && /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp)$/.test(p.path)) return { id, path: p.path };
+    if (typeof p.data === 'string' && p.data.length < 3_000_000 && PHOTO_DATA.test(p.data)) return { id, data: p.data };
+    return null;
+  }).filter(Boolean).slice(0, 8) : [];
   const pick = (v, map, def) => Object.prototype.hasOwnProperty.call(map, v) ? v : def;
 
   /* Нормалізатори зберігають невідомі поля (...x), щоб нові версії не втрачали дані. */
   const N = {
     suppliers: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categories: strArr(x.categories), instagram: str(x.instagram), website: str(x.website), phone: str(x.phone), messenger: str(x.messenger), contactPerson: str(x.contactPerson), city: str(x.city), minOrder: str(x.minOrder), paymentTerms: str(x.paymentTerms), deliveryTerms: str(x.deliveryTerms), defectTerms: str(x.defectTerms), notes: str(x.notes), status: pick(x.status, SUPPLIER_STATUSES, 'interested'), checkedAt: date(x.checkedAt), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
-    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     notes: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), body: str(x.body), tags: strArr(x.tags), pinned: !!x.pinned, supplierId: x.supplierId ? str(x.supplierId) : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     tasks: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), description: str(x.description), deadline: date(x.deadline), priority: pick(x.priority, PRIORITIES, 'medium'), status: pick(x.status, TASK_STATUSES, 'planned'), checklist: Array.isArray(x.checklist) ? x.checklist.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), text: str(i.text), done: !!i.done })).filter(i => i.text) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     expenses: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categoryId: str(x.categoryId) || 'other', planned: numOrNull(x.planned), paid: numOrNull(x.paid), comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),

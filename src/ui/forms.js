@@ -5,6 +5,7 @@ import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core
 import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, splitList, todayISO, uid, uniq } from '../core/utils.js';
 import { ACTIONS } from './events.js';
 import { F, closeModal, confirmDialog, dateField, formModal, g, moneyField, openModal, supplierOptions } from './modal.js';
+import { LOCAL_BYTES, MAX_PHOTOS, dataBytes, deletePhotos, hydratePhotos, photoImg, savePhoto } from './photos.js';
 import { D, UI, toast } from './shared.js';
 import { render } from './shell.js';
 
@@ -50,6 +51,7 @@ export function productForm(id, presetSupplier) {
   const p = id ? Repo.get('products', id) : null;
   const v = p || { priceType: 'unit', priceDate: todayISO(), supplierId: presetSupplier || '' };
   const cats = uniq([...D().settings.productCategories, ...D().products.map(x => x.category).filter(Boolean)]);
+  const ph = { kept: [...(p?.photos || [])], removed: [], pending: [] };
   formModal({
     title: p ? 'Редагувати товар' : 'Новий товар',
     fields: `${F.text('name', 'Назва', v.name, { req: true, full: true })}
@@ -65,9 +67,12 @@ export function productForm(id, presetSupplier) {
       ${F.money('retailPrice', 'Планова роздрібна ціна за одиницю, ₴', v.retailPrice)}
       ${F.date('priceDate', 'Ціна актуальна на', v.priceDate)}
       <div class="full calc-preview" id="calc-preview"></div>
-      ${F.area('comment', 'Коментар', v.comment, { rows: 2 })}`,
+      ${F.area('comment', 'Коментар', v.comment, { rows: 2 })}
+      <div class="field full"><span class="lbl">Фото</span><div class="photo-edit" id="photo-edit"></div>
+        <span class="hint">До ${MAX_PHOTOS} фото. Великі знімки зменшуються автоматично.</span></div>`,
     onMount: m => {
       const form = m.querySelector('form');
+      wirePhotoEditor(m.querySelector('#photo-edit'), ph);
       const upd = () => {
         const type = form.querySelector('[name=priceType]:checked').value;
         m.querySelector('#pack-wrap').hidden = type !== 'pack';
@@ -87,8 +92,70 @@ export function productForm(id, presetSupplier) {
       return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), priceType: type, purchasePrice, packQty, retailPrice, priceDate: dateField(fd, 'priceDate', errors), comment: g(fd, 'comment') } };
     },
     onDelete: p ? () => ACTIONS['del-product']({ dataset: { id: p.id } }) : null,
-    save: async vals => { if (p) { await Repo.update('products', p.id, vals); toast('Товар збережено'); } else { await Repo.create('products', vals); toast('Товар додано'); } },
+    save: async vals => {
+      const id = p ? p.id : uid();
+      const btn = document.querySelector('.modal-f [type=submit]'); if (btn && ph.pending.length) { btn.disabled = true; btn.textContent = 'Завантаження фото…'; }
+      const added = [];
+      let full = false;
+      for (const f of ph.pending) {
+        try {
+          const x = await savePhoto(id, f.file);
+          if (x.data && dataBytes([...ph.kept, ...added, x]) > LOCAL_BYTES) { full = true; continue; }
+          added.push(x);
+        } catch (e) { toast(e.message || 'Не вдалося додати фото', 'error'); }
+      }
+      if (full) toast('Без входу в обліковий запис до товару вміщається лише кілька фото. Увійдіть, щоб додати більше.', 'error');
+      ph.pending.forEach(f => URL.revokeObjectURL(f.url));
+      vals.photos = [...ph.kept, ...added];
+      if (p) { await Repo.update('products', id, vals); toast('Товар збережено'); } else { await Repo.create('products', { ...vals, id }); toast('Товар додано'); }
+      if (ph.removed.length) deletePhotos(ph.removed);
+    },
   });
+}
+/* Фото у формі товару: показ наявних, позначка на видалення (діє після «Зберегти»), додавання нових. */
+function wirePhotoEditor(box, ph) {
+  const draw = () => {
+    const total = ph.kept.length + ph.pending.length;
+    box.innerHTML = `<div class="photo-grid">
+      ${ph.kept.map((x, i) => `<div class="photo-cell">${photoImg(x, 'photo-img')}<button type="button" class="photo-x" data-ph-del="${i}" aria-label="Прибрати фото">✕</button></div>`).join('')}
+      ${ph.removed.map((x, i) => `<div class="photo-cell gone">${photoImg(x, 'photo-img')}<span class="photo-note">буде видалено</span><button type="button" class="btn sm" data-ph-back="${i}">Повернути</button></div>`).join('')}
+      ${ph.pending.map((f, i) => `<div class="photo-cell"><img class="photo-img" src="${f.url}" alt=""><span class="photo-note">нове</span><button type="button" class="photo-x" data-ph-drop="${i}" aria-label="Не додавати">✕</button></div>`).join('')}
+      ${total < MAX_PHOTOS ? `<label class="photo-add"><input type="file" accept="image/*" multiple hidden data-ph-input><span>+ Фото</span></label>` : ''}
+    </div>`;
+    hydratePhotos(box);
+  };
+  box.addEventListener('click', e => {
+    const del = e.target.closest('[data-ph-del]'), back = e.target.closest('[data-ph-back]'), drop = e.target.closest('[data-ph-drop]');
+    if (del) ph.removed.push(...ph.kept.splice(+del.dataset.phDel, 1));
+    else if (back) { if (ph.kept.length + ph.pending.length >= MAX_PHOTOS) return toast(`Не більше ${MAX_PHOTOS} фото`); ph.kept.push(...ph.removed.splice(+back.dataset.phBack, 1)); }
+    else if (drop) { const [f] = ph.pending.splice(+drop.dataset.phDrop, 1); URL.revokeObjectURL(f.url); }
+    else return;
+    draw();
+  });
+  box.addEventListener('change', e => {
+    if (!e.target.matches('[data-ph-input]')) return;
+    const room = MAX_PHOTOS - ph.kept.length - ph.pending.length;
+    const files = [...e.target.files].filter(f => /^image\//.test(f.type));
+    if (files.length > room) toast(`Додано ${room} з ${files.length}: не більше ${MAX_PHOTOS} фото на товар`);
+    files.slice(0, room).forEach(file => ph.pending.push({ file, url: URL.createObjectURL(file) }));
+    draw();
+  });
+  draw();
+}
+/** Перегляд фото товару на весь екран. */
+export function openGallery(product, start = 0) {
+  const list = product.photos || []; if (!list.length) return;
+  let i = Math.min(Math.max(0, start), list.length - 1);
+  openModal({ title: product.name || 'Фото', wide: true, body: '<div class="modal-b gallery"></div>', onMount: m => {
+    const box = m.querySelector('.gallery');
+    const draw = () => {
+      box.innerHTML = `<div class="gallery-main">${photoImg(list[i], 'gallery-img', product.name)}</div>
+        ${list.length > 1 ? `<div class="gallery-nav"><button class="btn sm" data-g="-1" aria-label="Попереднє фото">‹</button><span class="small muted">${i + 1} з ${list.length}</span><button class="btn sm" data-g="1" aria-label="Наступне фото">›</button></div>` : ''}`;
+      hydratePhotos(box);
+    };
+    box.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) { i = (i + Number(b.dataset.g) + list.length) % list.length; draw(); } });
+    draw();
+  } });
 }
 
 /* --- нотатка --- */

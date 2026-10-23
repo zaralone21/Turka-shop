@@ -75,7 +75,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .storage-strip b { font-weight: 600; }
 .storage-strip.err { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 20%, transparent); }
 .demo-strip { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 20%, transparent); }
-.topbar, .tabbar, .fab, .only-m { display: none; }
+.topbar, .tabbar, .fab, .only-m, .m-list.only-m { display: none; }
 
 /* ---------- кнопки й поля ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 8px 14px; border-radius: 9px; cursor: pointer; font-weight: 500; line-height: 1.2; text-decoration: none; white-space: nowrap; }
@@ -378,3 +378,27 @@ table.t .acts { white-space: nowrap; text-align: right; }
 .ai-layout .chat { height: calc(100dvh - 190px); min-height: 420px; }
 @media (max-width: 600px) { .ai-layout .chat { height: calc(100dvh - 290px); min-height: 360px; } }
 .drawer-h .row { flex-wrap: nowrap; }
+
+/* ---------- Фото товарів ---------- */
+.thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; background: var(--surface-2); display: block; }
+.thumb-btn { all: unset; position: relative; float: left; margin: 0 10px 4px 0; cursor: zoom-in; border-radius: 8px; }
+.thumb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.thumb-btn i, .m-photo i { position: absolute; right: -4px; bottom: -4px; font-style: normal; font-size: 11px; line-height: 16px; min-width: 16px; padding: 0 4px; text-align: center; border-radius: 8px; background: var(--fg); color: var(--surface); }
+.m-item.has-photo { display: grid; grid-template-columns: 56px 1fr; column-gap: 12px; row-gap: 4px; }
+.m-item.has-photo > :not(.m-photo) { grid-column: 2; }
+.m-photo { position: relative; grid-column: 1; grid-row: 1 / span 4; align-self: start; }
+.m-photo .thumb { width: 56px; height: 56px; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+.photo-cell { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); }
+.photo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-cell.gone .photo-img { opacity: .3; }
+.photo-cell.gone .btn { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); white-space: nowrap; }
+.photo-note { position: absolute; left: 6px; top: 6px; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--surface); color: var(--muted); }
+.photo-x { all: unset; position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border-radius: 50%; text-align: center; line-height: 26px; font-size: 13px; cursor: pointer; background: rgba(0,0,0,.55); color: #fff; }
+.photo-x:focus-visible { outline: 2px solid var(--accent); }
+.photo-add { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: 10px; border: 1.5px dashed var(--line); color: var(--accent); cursor: pointer; font-weight: 600; }
+.photo-add:hover, .photo-add:focus-within { background: var(--surface-2); }
+.gallery { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.gallery-main { width: 100%; display: flex; justify-content: center; background: var(--surface-2); border-radius: 10px; min-height: 200px; }
+.gallery-img { max-width: 100%; max-height: 70vh; object-fit: contain; display: block; }
+.gallery-nav { display: flex; gap: 12px; align-items: center; }

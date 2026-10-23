@@ -7,7 +7,9 @@ import { kyivParts } from './utils.js';
 
 export const MAX_STEPS = 10;
 export const CHAT_SOFT_LIMIT = 150_000; // байт: далі варто почати нову розмову
+export const CHAT_STORE_LIMIT = 170_000; // байт: більша розмова не вміститься в запис бази
 const RESULT_LIMIT = 30_000;
+const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
 
 export class AIError extends Error { constructor(code, message) { super(message || code); this.code = code; } }
 
@@ -16,8 +18,22 @@ export function sanitizeAssistant(content) {
   const list = Array.isArray(content) ? content : [];
   const last = list.map(b => b.type).lastIndexOf('fallback');
   if (last < 0) return list;
-  const drop = new Set(['thinking', 'redacted_thinking', 'tool_use']);
-  return list.filter((b, i) => i >= last || !drop.has(b.type));
+  const drop = new Set(['thinking', 'redacted_thinking', 'tool_use', 'server_tool_use']);
+  return list.filter((b, i) => i >= last || !(drop.has(b.type) || /_tool_result$/.test(b.type)));
+}
+/** Текст відповіді для показу. Блоки з цитатами — частини одного абзацу; джерела додаються списком посилань. */
+export function textOf(content) {
+  let out = '', prevCited = false; const sources = new Map();
+  for (const b of content) {
+    if (b.type !== 'text') { prevCited = false; continue; }
+    const cited = Array.isArray(b.citations) && b.citations.length;
+    if (cited) b.citations.forEach(c => { if (c.url && /^https?:\/\//.test(c.url)) sources.set(c.url, c.title || c.url); });
+    out += out && !cited && !prevCited ? '\n\n' + b.text : b.text;
+    prevCited = !!cited;
+  }
+  out = out.trim();
+  if (out && sources.size) out += '\n\nДжерела:\n' + [...sources].slice(0, 8).map(([u, t]) => `- [${t.replace(/[[\]]/g, '')}](${u})`).join('\n');
+  return out;
 }
 const stamp = now => { const p = kyivParts(now); return `[Зараз: ${p.date} ${p.time}, Київ]`; };
 const toolUses = msg => (msg && msg.role === 'assistant' && Array.isArray(msg.content) ? msg.content.filter(b => b.type === 'tool_use') : []);
@@ -54,8 +70,11 @@ export async function runTurn({ chat, text, repo, callModel, now = () => new Dat
     const content = sanitizeAssistant(res.content);
     if (!content.length) { chat.log.push({ type: 'error', code: 'empty', text: 'Порожня відповідь моделі.' }); onUpdate(chat); return chat; }
     chat.messages.push({ role: 'assistant', content });
-    const said = content.filter(b => b.type === 'text' && b.text.trim()).map(b => b.text).join('\n\n');
+    const said = textOf(content);
+    content.filter(b => b.type === 'server_tool_use' && WEB_TOOLS.has(b.name)).forEach(b => chat.log.push({ type: 'tool', name: b.name, at: now().toISOString() }));
     if (said) chat.log.push({ role: 'assistant', text: said, at: now().toISOString() });
+    // Пошук і читання сайтів виконуються на сервері; довгий хід сервер ставить на паузу, і його треба продовжити тим самим запитом.
+    if (res.stop_reason === 'pause_turn') { onUpdate(chat); continue; }
 
     const calls = content.filter(b => b.type === 'tool_use');
     if (!calls.length || res.stop_reason !== 'tool_use') {

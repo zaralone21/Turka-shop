@@ -1,4 +1,4 @@
-import { AIError, CHAT_SOFT_LIMIT, chatSize, runTurn } from '../core/aiAgent.js';
+import { AIError, CHAT_SOFT_LIMIT, CHAT_STORE_LIMIT, chatSize, runTurn } from '../core/aiAgent.js';
 import { applyChanges, planChanges, undoChanges } from '../core/aiTools.js';
 import { Cloud } from '../core/cloud.js';
 import { Repo } from '../core/repo.js';
@@ -28,7 +28,7 @@ const STATUS_HINT = {
 const TOOL_LABELS = {
   get_overview: 'огляд справ', list_tasks: 'завдання', list_reminders: 'нагадування', get_budget: 'бюджет', list_purchases: 'закупівлі',
   search_records: 'пошук', get_record: 'запис', compare_offers: 'порівняння цін', check_purchase_plan: 'розрахунок закупівлі', data_quality: 'перевірка даних',
-  create_task: 'створення завдання', create_note: 'створення нотатки', create_reminder: 'створення нагадування', propose_changes: 'підготовка змін', draft_message: 'чернетка',
+  web_search: 'пошук у мережі', web_fetch: 'перегляд сайту', create_task: 'створення завдання', create_note: 'створення нотатки', create_reminder: 'створення нагадування', propose_changes: 'підготовка змін', draft_message: 'чернетка',
 };
 const OWN_CARD = new Set(['create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
 const MONEY = new Set(['purchasePrice', 'retailPrice', 'planned', 'paid', 'totalBudget', 'deliveryCost']);
@@ -80,12 +80,14 @@ const current = () => (UI.chatId && Repo.get('chats', UI.chatId)) || null;
 async function send(text) {
   text = String(text || '').trim(); if (!text || S.busy) return;
   let chat = current();
-  if (chat && chatSize(chat) > CHAT_SOFT_LIMIT) { chat = null; toast('Попередня розмова завелика, тому почато нову'); }
+  if (chat && (chat.closed || chatSize(chat) > CHAT_SOFT_LIMIT)) { chat = null; toast('Попередня розмова завелика, тому почато нову'); }
   S.busy = true; S.draft = ''; S.focus = true;
   if (!chat) { chat = await Repo.create('chats', { messages: [], log: [], notes: [], title: text.slice(0, 60) }); UI.chatId = chat.id; }
   const result = await runTurn({ chat, text, repo: Repo, callModel, onUpdate: c => { S.live = c; rerender(); } });
   S.busy = false; S.live = null;
-  await Repo.update('chats', chat.id, { messages: result.messages, log: result.log, notes: result.notes });
+  // Розмова з великими сторінками сайтів може не вміститися в запис бази: тоді зберігаємо лише видиму історію й закриваємо її.
+  const full = chatSize(result) <= CHAT_STORE_LIMIT;
+  await Repo.update('chats', chat.id, full ? { messages: result.messages, log: result.log, notes: result.notes } : { messages: [], log: result.log, notes: [], closed: true });
   if (result.log.at(-1)?.code === 'not_configured') refreshStatus(true);
 }
 const entryOf = (i) => { const c = current(); return c ? c.log[i] : null; };
@@ -153,10 +155,11 @@ function chatHtml(compact) {
   const c = S.busy && S.live ? S.live : current();
   const log = c ? c.log : [];
   const hint = STATUS_HINT[S.state];
-  const body = log.length ? logHtml(log, !S.busy) : `<div class="empty mini" style="margin:auto"><p>${canAsk() ? 'Запитайте про бюджет, постачальників, ціни, закупівлі чи справи. AI бачить лише ваші записи й нічого не надсилає сам.' : esc(hint || '')}</p>
+  const body = log.length ? logHtml(log, !S.busy) : `<div class="empty mini" style="margin:auto"><p>${canAsk() ? 'Запитайте про бюджет, постачальників, ціни, закупівлі чи справи. AI бачить ваші записи, може шукати в мережі й відкривати сайти постачальників, але нічого не надсилає й не замовляє сам.' : esc(hint || '')}</p>
       ${canAsk() ? `<div class="row" style="justify-content:center">${SUGGEST.map(s => `<button class="btn sm" data-act="ai-suggest" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : ''}</div>`;
   return `<div class="chat">
     <div class="chat-log" id="chat-log" aria-live="polite">${body}${S.busy ? '<div class="msg tool">Думаю…</div>' : ''}</div>
+    ${c && c.closed && !S.busy ? '<div class="callout" style="margin:0 12px 8px">Розмова стала завеликою для збереження, тому її закрито. Наступне повідомлення почне нову розмову.</div>' : ''}
     ${log.length && hint && !canAsk() ? `<div class="callout warn" style="margin:0 12px 8px">${esc(hint)}</div>` : ''}
     <form class="chat-form" data-form="ai-chat"><textarea class="input" name="q" id="ai-input" rows="1" placeholder="${canAsk() ? 'Напишіть запит…' : 'AI недоступний'}" aria-label="Повідомлення AI-менеджеру" ${canAsk() && !S.busy ? '' : 'disabled'}></textarea><button class="btn primary" type="submit" ${canAsk() && !S.busy ? '' : 'disabled'} aria-label="Надіслати">Надіслати</button></form>
   </div>`;
