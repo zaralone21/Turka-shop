@@ -11,6 +11,12 @@ const MODEL = Deno.env.get("AI_MODEL") || "claude-opus-5-5";
 const EFFORT = (Deno.env.get("AI_EFFORT") || "medium") as "low" | "medium" | "high";
 const DAILY_LIMIT = Number(Deno.env.get("AI_DAILY_LIMIT") || 300);
 const MAX_BODY = 2_000_000;
+// Пошук у мережі й читання сайтів (виконуються на серверах Anthropic). AI_WEB=off вимикає.
+const WEB = (Deno.env.get("AI_WEB") || "on") !== "off";
+const WEB_TOOLS = WEB ? [
+  { type: "web_search_20260209", name: "web_search", max_uses: 5, user_location: { type: "approximate", country: "UA", timezone: "Europe/Kyiv" } },
+  { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5, max_content_tokens: 8000, citations: { enabled: true } },
+] : [];
 
 const client = KEY ? new Anthropic({ apiKey: KEY, maxRetries: 2, timeout: 120_000 }) : null;
 
@@ -18,7 +24,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const user = await userFrom(req);
   if (!user) return json({ error: "unauthorized" }, 401);
-  if (req.method === "GET") return json({ configured: !!client, model: client ? MODEL : null });
+  if (req.method === "GET") return json({ configured: !!client, model: client ? MODEL : null, web: !!client && WEB });
   if (req.method !== "POST") return json({ error: "method" }, 405);
   if (!client) return json({ error: "not_configured" }, 503);
 
@@ -29,6 +35,7 @@ Deno.serve(async (req) => {
     const body = JSON.parse(raw);
     messages = body.messages;
     if (!Array.isArray(messages) || !messages.length || messages[0].role !== "user") throw new Error("bad");
+    if (messages.length > 400) throw new Error("bad");
   } catch {
     return json({ error: "bad_request" }, 400);
   }
@@ -43,7 +50,7 @@ Deno.serve(async (req) => {
       model: MODEL,
       max_tokens: 16000,
       system: SYSTEM,
-      tools: TOOLS as Anthropic.Beta.BetaTool[],
+      tools: [...TOOLS, ...WEB_TOOLS] as Anthropic.Beta.BetaToolUnion[],
       messages,
       output_config: { effort: EFFORT },
       cache_control: { type: "ephemeral" },

@@ -4,6 +4,7 @@ import { Repo } from '../core/repo.js';
 import { esc } from '../core/utils.js';
 import { AI } from './ai.js';
 import { notifUnread } from './notifications.js';
+import { hydratePhotos } from './photos.js';
 import { D, NAV_GROUPS, PAGES, UI, VIEWS, isOverdue, pageTitle, root } from './shared.js';
 
 /* ---------- каркас ---------- */
@@ -83,6 +84,7 @@ export function render() {
   ${UI.aiOpen && UI.page !== 'ai' ? AI.drawerHtml() : ''}`;
   if (UI.keepScroll) window.scrollTo(0, scroll); UI.keepScroll = true;
   AI.afterRender();
+  hydratePhotos(root);
 }
 export function banners() {
   const st = Repo.status; let h = '';

@@ -97,7 +97,7 @@ function search(d, query, collections) {
   const cols = Array.isArray(collections) && collections.length ? collections.filter(c => DATA.includes(c)) : DATA;
   const out = {};
   for (const c of cols) {
-    const hits = d[c].filter(r => { const hay = JSON.stringify(r).toLowerCase(); return words.every(w => hay.includes(w)); });
+    const hits = d[c].filter(r => { const hay = JSON.stringify({ ...r, photos: undefined }).toLowerCase(); return words.every(w => hay.includes(w)); });
     if (hits.length) out[c] = limited(d, c, hits);
   }
   return Object.keys(out).length ? out : { found: 0 };
@@ -106,7 +106,7 @@ function getRecord(d, col, id) {
   need(DATA.includes(col), 'Невідома колекція');
   const r = d[col].find(x => x.id === id); need(r, `Запис ${col}/${id} не знайдено`);
   const rec = { ...r };
-  if (col === 'products') { rec.unitCost = money(Calc.unitCost(r)); rec.priceAgeDays = ageDays(r.priceDate); rec.priceStale = rec.priceAgeDays !== null ? rec.priceAgeDays > STALE_PRICE_DAYS : null; rec.supplier = nameOf(d, 'suppliers', r.supplierId); }
+  if (col === 'products') { rec.photos = (r.photos || []).length; rec.unitCost = money(Calc.unitCost(r)); rec.priceAgeDays = ageDays(r.priceDate); rec.priceStale = rec.priceAgeDays !== null ? rec.priceAgeDays > STALE_PRICE_DAYS : null; rec.supplier = nameOf(d, 'suppliers', r.supplierId); }
   if (col === 'purchases') rec.computed = Calc.purchaseTotal(r);
   if (col === 'reminders') rec.fireAtKyiv = fireAt(r) ? kyivParts(new Date(fireAt(r))) : null;
   if (col === 'suppliers') {
@@ -178,7 +178,7 @@ function dataQuality(d) {
 }
 
 /* ---------- Зміни з підтвердженням ---------- */
-const PROTECTED = new Set(['id', 'createdAt', 'updatedAt', 'fireAt']);
+const PROTECTED = new Set(['id', 'createdAt', 'updatedAt', 'fireAt', 'photos']);
 const show = v => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 /** Перевіряє пропоновані зміни й будує точний перелік «було → стане». Нічого не змінює. */
 export function planChanges(d, changes) {

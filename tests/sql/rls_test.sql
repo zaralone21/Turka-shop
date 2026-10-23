@@ -45,3 +45,28 @@ update public.records set due_at = now() - interval '5 seconds' where id = 'r1';
 select 'Після відкладення: ' || count(*) as check from public.claim_due_reminders(100);
 select 'Ще раз: ' || count(*) as check from public.claim_due_reminders(100);
 select 'Усього в журналі: ' || count(*) as check from public.notifications;
+
+-- Фото товарів: кожен користувач працює лише зі своєю текою
+reset role;
+select 'Сховище фото приватне: ' || (not public)::text as check from storage.buckets where id = 'product-photos';
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into storage.objects (bucket_id, name) values ('product-photos', '11111111-1111-1111-1111-111111111111/p1/a.jpg');
+do $$ begin
+  begin
+    insert into storage.objects (bucket_id, name) values ('product-photos', '22222222-2222-2222-2222-222222222222/p1/b.jpg');
+    raise exception 'FAIL: A зміг записати фото в теку B';
+  exception when insufficient_privilege then raise notice 'OK: A не може писати в чужу теку';
+  end;
+end $$;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  if (select count(*) from storage.objects) <> 0 then raise exception 'FAIL: B бачить фото A'; end if;
+  raise notice 'OK: B не бачить фото A';
+end $$;
+delete from storage.objects;
+reset role;
+do $$ begin
+  if (select count(*) from storage.objects) <> 1 then raise exception 'FAIL: B видалив фото A'; end if;
+  raise notice 'OK: B не може видалити фото A';
+end $$;

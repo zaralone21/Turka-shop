@@ -5,7 +5,8 @@ import { clearLegacy, migrationDialog, openData } from './session.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
-import { budgetCatsModal, deleteSupplier, expenseForm, noteForm, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { budgetCatsModal, deleteSupplier, expenseForm, noteForm, openGallery, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
@@ -31,7 +32,8 @@ export const ACTIONS = {
   'back-suppliers': () => { UI.supplierId = null; render(); },
   'supplier-checked': async el => { await Repo.update('suppliers', el.dataset.id, { checkedAt: todayISO() }); toast('Дату перевірки оновлено'); },
   'add-product': el => productForm(null, el.dataset.supplier), 'edit-product': el => productForm(el.dataset.id),
-  'del-product': async el => { const p = Repo.get('products', el.dataset.id); if (await confirmDialog({ title: 'Видалити товар?', text: `<p style="margin:0">«${esc(p.name)}» буде видалено.</p>` })) { await Repo.remove('products', p.id); toast('Товар видалено'); } },
+  'del-product': async el => { const p = Repo.get('products', el.dataset.id); const n = (p.photos || []).length; if (await confirmDialog({ title: 'Видалити товар?', text: `<p style="margin:0">«${esc(p.name)}» буде видалено${n ? ` разом із фото (${n})` : ''}.</p>` })) { await Repo.remove('products', p.id); deletePhotos(p.photos); toast('Товар видалено'); } },
+  'product-photos': el => { const p = Repo.get('products', el.dataset.id); if (p) openGallery(p); },
   'add-note': el => noteForm(null, el.dataset.supplier), 'edit-note': el => noteForm(el.dataset.id),
   'del-note': async el => { const n = Repo.get('notes', el.dataset.id); if (await confirmDialog({ title: 'Видалити нотатку?', text: `<p style="margin:0">«${esc(n.title || 'Без заголовка')}» буде видалено.</p>` })) { await Repo.remove('notes', n.id); toast('Нотатку видалено'); } },
   'pin-note': async el => { const n = Repo.get('notes', el.dataset.id); await Repo.update('notes', n.id, { pinned: !n.pinned }); },
