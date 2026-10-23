@@ -70,3 +70,18 @@ do $$ begin
   if (select count(*) from storage.objects) <> 1 then raise exception 'FAIL: B видалив фото A'; end if;
   raise notice 'OK: B не може видалити фото A';
 end $$;
+
+-- Історія розмов з AI: лише своя
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into public.ai_threads (chat_id, messages) values ('c1', '[{"role":"user","content":"привіт"}]');
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  if (select count(*) from public.ai_threads) <> 0 then raise exception 'FAIL: B бачить розмови A'; end if;
+  begin
+    insert into public.ai_threads (user_id, chat_id) values ('11111111-1111-1111-1111-111111111111', 'x');
+    raise exception 'FAIL: B записав розмову від імені A';
+  exception when insufficient_privilege then raise notice 'OK: розмови з AI ізольовані';
+  end;
+end $$;
+reset role;
