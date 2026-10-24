@@ -6,6 +6,8 @@ import { AI } from './ai.js';
 import { notifUnread } from './notifications.js';
 import { hydrateFiles } from './files.js';
 import { hydratePhotos } from './photos.js';
+import { BRAND, cottonLogo } from './brand.js';
+import { currentTheme, themeLabel } from './theme.js';
 import { D, NAV_GROUPS, PAGES, UI, VIEWS, isOverdue, pageTitle, root } from './shared.js';
 
 /* ---------- каркас ---------- */
@@ -33,8 +35,22 @@ export const ICON = {
   expense: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   send: '<path d="M4 12 20 4l-6 16-3-7z"/>',
+  shop: '<path d="M4 9h16l-1.2-4.2A1 1 0 0 0 17.8 4H6.2a1 1 0 0 0-1 .8z"/><path d="M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M5.5 12v8h13v-8M10 20v-4.5h4V20"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
 };
 export const svg = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICON[name]}</svg>`;
+/** Перемикач теми: сонце в темній темі, місяць у світлій. Перемикається без перемальовування сторінки. */
+export const themeBtn = (withText = false) => `<button type="button" class="icon-btn theme-btn" data-act="theme-toggle" aria-label="${themeLabel()}" title="${themeLabel()}" aria-pressed="${currentTheme() === 'dark'}">${svg('moon', 'class="t-moon"')}${svg('sun', 'class="t-sun"')}${withText ? '<span class="hide-h">Тема</span>' : ''}</button>`;
+/** Сьогоднішня дата словами, за Києвом. */
+export const longToday = () => {
+  const now = new Date(), tz = 'Europe/Kyiv';
+  const wd = new Intl.DateTimeFormat('uk-UA', { weekday: 'long', timeZone: tz }).format(now);
+  const dm = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', timeZone: tz }).format(now);
+  const y = new Intl.DateTimeFormat('uk-UA', { year: 'numeric', timeZone: tz }).format(now).replace(/\D/g, '');
+  return `${wd.charAt(0).toUpperCase() + wd.slice(1)}, ${dm} ${y}`;
+};
+export const brandHtml = () => `<div class="brand">${cottonLogo()}<div class="nm"><b>КОМФОРТ <i>home</i></b><span>білизна · шкарпетки · тапки</span></div></div>`;
 export const TABS = [['home', 'Головна'], ['planner', 'Планер'], ['ai', 'AI'], ['suppliers', 'Постачальники'], ['more', 'Ще']];
 export const MORE_PAGES = ['reminders', 'premises', 'fitout', 'products', 'purchases', 'notes', 'budget', 'monthly', 'breakeven', 'data'];
 /* Що додає кнопка «+» у кожному розділі. */
@@ -87,16 +103,18 @@ export function render() {
   root.innerHTML = `
   <div class="app">
     <aside class="side">
-      <div class="brand"><b>Магазин</b><span>білизна · шкарпетки · тапки</span></div>
+      ${brandHtml()}
       <nav class="nav" aria-label="Розділи">${navHtml}</nav>
       <div class="side-foot">${syncBadge()}</div>
     </aside>
     <main class="main">
       <header class="header"><div class="header-in">
-        <div class="ttl">${esc(pageTitle(UI.page))}${Repo.status.demo ? ' <span class="pill warn">Демо</span>' : ''}</div>
-        <button class="icon-btn hide-m" data-act="quick-add" aria-label="Додати запис">${svg('plus')}<span>Додати</span></button>
+        ${UI.page === 'home' ? `<div class="ttl hero-h hide-m"><span class="hero-date">${esc(longToday())}</span><h1>Ваш магазин починається тут</h1></div>` : ''}
+        <div class="ttl ${UI.page === 'home' ? 'only-m-flex' : ''}"><span class="m-logo">${cottonLogo('logo-s')}</span>${UI.page === 'home' ? BRAND.replace('home', '<i>home</i>') : esc(pageTitle(UI.page))}${Repo.status.demo ? ' <span class="pill warn">Демо</span>' : ''}</div>
         ${UI.page === 'ai' ? '' : `<button class="icon-btn" data-act="ai-open" aria-label="AI-менеджер">${svg('ai')}<span class="hide-h">AI</span></button>`}
+        ${themeBtn()}
         <button class="icon-btn" data-act="notif-open" aria-label="Сповіщення${bell ? `: ${bell} нових` : ''}">${svg('bell')}${bell ? `<i class="badge">${bell}</i>` : ''}</button>
+        <button class="icon-btn primary hide-m" data-act="quick-add" aria-label="Додати запис">${svg('plus')}<span>Додати</span></button>
       </div></header>
       <div class="wrap">${banners()}${VIEWS[UI.page]()}</div>
     </main>
