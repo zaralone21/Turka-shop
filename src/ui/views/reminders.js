@@ -8,9 +8,8 @@ import { D, UI, VIEWS, emptyState } from '../shared.js';
 /* ---------- Нагадування ---------- */
 export function linkLabel(link) {
   if (!link) return '';
-  const col = { task: 'tasks', supplier: 'suppliers', purchase: 'purchases' }[link.type];
-  const r = Repo.get(col, link.id); if (!r) return '';
-  return `${Schema.LINK_TYPES[link.type]}: ${esc(r.title || r.name)}`;
+  const r = Repo.get(Schema.LINK_COLLECTION[link.type], link.id); if (!r) return '';
+  return `${Schema.LINK_TYPES[link.type]}: ${esc(r.title || r.name || r.address)}`;
 }
 export function reminderRow(r, now = new Date()) {
   const due = isDue(r, now), done = r.status === 'done';

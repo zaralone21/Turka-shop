@@ -2,10 +2,11 @@ import { Cloud, localLegacyData } from '../core/cloud.js';
 import { Demo } from '../core/demo.js';
 import { renderAuth } from './auth.js';
 import { clearLegacy, migrationDialog, openData } from './session.js';
+import { expenseOrigins } from '../core/opening.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
-import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, purchaseForm, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
@@ -21,7 +22,7 @@ export const ACTIONS = {
   'fab': () => { const a = FAB_ACTION[UI.page]; if (a) ACTIONS[a]({ dataset: {} }); else quickAddSheet(); },
   'quick-add': () => quickAddSheet(),
   'go-budget': () => go('budget'),
-  'add-purchase': el => purchaseForm(null, { supplierId: el.dataset.supplier || '' }), 'edit-purchase': el => purchaseForm(el.dataset.id), 'purchase-to-budget': el => purchaseToBudget(el.dataset.id),
+  'add-purchase': el => purchaseForm(null, { supplierId: el.dataset.supplier || '' }), 'edit-purchase': el => purchaseForm(el.dataset.id), 'purchase-to-budget': el => purchaseToBudget(el.dataset.id), 'purchase-relink': el => purchaseRelink(el.dataset.id), 'purchase-sync': el => purchaseSync(el.dataset.id),
   'add-reminder': el => reminderForm(null, el.dataset.supplier ? { link: { type: 'supplier', id: el.dataset.supplier } } : {}), 'edit-reminder': el => reminderForm(el.dataset.id),
   'rem-done': el => reminderDone(el.dataset.id), 'rem-snooze': el => snoozeSheet(el.dataset.id),
   'notif-open': () => openNotifCenter(),
@@ -48,10 +49,11 @@ export const ACTIONS = {
   'del-task': async el => { const t = Repo.get('tasks', el.dataset.id); if (await confirmDialog({ title: 'Видалити завдання?', text: `<p style="margin:0">«${esc(t.title)}» буде видалено разом із чеклістом.</p>` })) { await Repo.remove('tasks', t.id); toast('Завдання видалено'); } },
   'task-done': async el => { await Repo.update('tasks', el.dataset.id, { status: 'done' }); toast('Завдання виконано'); },
   'add-expense': () => expenseForm(), 'edit-expense': el => expenseForm(el.dataset.id),
-  'del-expense': async el => { const e = Repo.get('expenses', el.dataset.id); if (await confirmDialog({ title: 'Видалити витрату?', text: `<p style="margin:0">«${esc(e.name)}» буде видалено з бюджету.</p>` })) { await Repo.remove('expenses', e.id); toast('Витрату видалено'); } },
+  'del-expense': async el => { const e = Repo.get('expenses', el.dataset.id); const from = expenseOrigins(D(), e);
+    if (await confirmDialog({ title: 'Видалити витрату?', text: `<p style="margin:0">«${esc(e.name)}» буде видалено з бюджету.</p>${from.length ? `<div class="callout warn" style="margin-top:10px">Стаття пов’язана з: ${from.map(x => esc(x.label)).join('; ')}. Там з’явиться позначка «статтю видалено» з можливістю створити її знову чи прив’язати іншу.</div>` : ''}` })) { await Repo.remove('expenses', e.id); toast('Витрату видалено'); } },
   'budget-cats': () => budgetCatsModal(),
   'use-margin': async el => { await Repo.setSettings({ breakeven: { ...D().settings.breakeven, margin: el.dataset.v.replace('.', ',') } }); },
-  'be-clear': async () => { await Repo.setSettings({ breakeven: { fixed: '', margin: '', extra: '', avgCheck: '', days: '26' } }); },
+  'be-clear': async () => { await Repo.setSettings({ breakeven: { ...D().settings.breakeven, fixed: '', margin: '', extra: '', avgCheck: '', days: '26' } }); },
   'export': () => exportJSON(), 'export-copy': () => showJSON(JSON.stringify(Repo.exportObject(), null, 2)),
   'copy': el => copyText(el.dataset.text),
   'demo-enter': async () => { try { localStorage.setItem(KEYS.mode, 'demo'); } catch {} await openData(); go('home'); toast('Відкрито демо-режим'); },
@@ -74,7 +76,7 @@ export function sheet(title, items) {
     onMount: m => m.querySelectorAll('[data-sheet]').forEach(b => b.onclick = () => { closeModal(); items[+b.dataset.sheet][3](); }) });
 }
 export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => [id, id, pageTitle(id), () => go(id)])); }
-export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()]]); }
+export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
 Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
 document.addEventListener('click', e => {
   const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else go(tab.dataset.tab); return; }
@@ -105,6 +107,7 @@ document.addEventListener('input', e => {
   const el = e.target; if (modalEl && modalEl.contains(el)) return;
   const refocus = (id, pos) => { const n = document.getElementById(id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } };
   if (el.dataset.filter && el.tagName === 'INPUT') { UI.f[el.dataset.filter] = el.value; const pos = el.selectionStart; render(); refocus(el.id, pos); }
+  else if (el.dataset.plan) { const be = D().settings.breakeven; Repo.setSettings({ breakeven: { ...be, salesPlan: { ...(be.salesPlan || {}), [el.dataset.plan]: el.value } } }); }
   else if (el.dataset.be) { const pos = el.selectionStart, id = el.id; Repo.setSettings({ breakeven: { ...D().settings.breakeven, [el.dataset.be]: el.value } }).then(() => refocus(id, pos)); }
 });
 document.addEventListener('submit', async e => {

@@ -33,10 +33,10 @@ const TOOL_LABELS = {
 };
 const OWN_CARD = new Set(['propose_product_photos', 'add_product_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
 const MONEY = new Set(['purchasePrice', 'retailPrice', 'planned', 'paid', 'totalBudget', 'deliveryCost']);
-const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'edit-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder' };
+const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'edit-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder', premises: 'open-ref', fitout: 'edit-fitout', monthly: 'edit-monthly' };
 const CREATED = { tasks: 'завдання', notes: 'нотатку', reminders: 'нагадування' };
 const FIELD = { title: 'назва', name: 'назва', deadline: 'термін', priority: 'пріоритет', status: 'статус', description: 'опис', purchasePrice: 'ціна закупівлі', retailPrice: 'роздрібна ціна', priceDate: 'дата ціни', packQty: 'у пакуванні', planned: 'план', paid: 'сплачено', totalBudget: 'загальний бюджет', expectedDate: 'очікувана дата', deliveryCost: 'доставка', date: 'дата', time: 'час', body: 'текст', supplierId: 'постачальник', categoryId: 'категорія' };
-const SUGGEST = ['Що мені зробити сьогодні й цього тижня?', 'Порівняй пропозиції на шкарпетки', 'Чи вміщається наступна закупівля в бюджет?', 'Яких даних бракує або вони застаріли?'];
+const SUGGEST = ['Що заважає відкритися до обраної дати?', 'Що ще потрібно купити для приміщення?', 'Склади план підготовки на тиждень', 'Що мені зробити сьогодні й цього тижня?', 'Порівняй пропозиції на шкарпетки', 'Чи вміщається наступна закупівля в бюджет?', 'Яких даних бракує або вони застаріли?'];
 
 /* ---------- Сервер ---------- */
 async function headers() {
@@ -127,8 +127,8 @@ function inline(s) {
   return s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\[([^\]]+)\]\((app:\/\/([a-z]+)\/([^)\s]+)|https?:\/\/[^)\s]+)\)/g, (m, label, url, col, id) => {
       if (col) {
-        const act = COLLECTION_ACT[col]; const rid = id.replace(/&amp;/g, '&');
-        return act && Repo.get(col, rid) ? `<button class="btn link rec-link" data-act="${act}" data-id="${esc(rid)}">${label}</button>` : `<span class="rec-missing" title="Запис не знайдено">${label}</span>`;
+        const rid = id.replace(/&amp;/g, '&');
+        return COLLECTION_ACT[col] && Repo.get(col, rid) ? `<button class="btn link rec-link" data-act="open-ref" data-col="${col}" data-id="${esc(rid)}">${label}</button>` : `<span class="rec-missing" title="Запис не знайдено">${label}</span>`;
       }
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
     });

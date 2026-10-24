@@ -1,5 +1,6 @@
 import { Calc } from './calc.js';
 import { STALE_PRICE_DAYS, STALE_SUPPLIER_DAYS, runChecks } from './checks.js';
+import { FITOUT_STATUSES, MONTHLY_KINDS, PREMISES_STATUSES, fitoutCategoryName, fitoutLink, fitoutSummary, isLeaseConfirmed, mainPremises, monthlySummary, nextPayDate, openingReadiness, premisesBudgetPlan, purchaseLink } from './opening.js';
 import { fireAt, isDue } from './reminders.js';
 import { Schema } from './schema.js';
 import { addDaysISO, daysFromToday, isNum, kyivParts } from './utils.js';
@@ -8,13 +9,13 @@ import { addDaysISO, daysFromToday, isNum, kyivParts } from './utils.js';
    Модель отримує лише результат конкретного інструмента, а всі розрахунки
    беруться з перевірених функцій застосунку (Calc, runChecks). */
 
-const DATA = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders'];
+const DATA = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders', 'premises', 'fitout', 'monthly'];
 const LIST_LIMIT = 50;
 const cut = (s, n = 400) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
 const money = n => (isNum(n) ? Math.round(n * 100) / 100 : null);
 const ageDays = iso => (iso ? -daysFromToday(iso) : null);
 const clean = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && !v.length)));
-const nameOf = (d, col, id) => { const r = id && d[col].find(x => x.id === id); return r ? (r.name || r.title) : null; };
+const nameOf = (d, col, id) => { const r = id && col && d[col] && d[col].find(x => x.id === id); return r ? (r.name || r.title || r.address) : null; };
 
 export class ToolError extends Error {}
 const need = (cond, msg) => { if (!cond) throw new ToolError(msg); };
@@ -26,10 +27,13 @@ function brief(d, col, r) {
     case 'suppliers': return clean({ id: r.id, name: r.name, status: Schema.SUPPLIER_STATUSES[r.status], city: r.city, categories: r.categories, contacts: [r.phone, r.messenger, r.instagram, r.website].filter(Boolean).join(', ') || null, checkedAt: r.checkedAt || null });
     case 'products': { const c = Calc.unitCost(r); return clean({ id: r.id, name: r.name, category: r.category, subcategory: r.subcategory, supplier: nameOf(d, 'suppliers', r.supplierId), supplierId: r.supplierId, unitCost: money(c), retailPrice: r.retailPrice, priceDate: r.priceDate || null, priceStale: r.priceDate ? ageDays(r.priceDate) > STALE_PRICE_DAYS : null }); }
     case 'notes': return clean({ id: r.id, title: r.title || 'Без заголовка', excerpt: cut(r.body, 200), supplierId: r.supplierId, updatedAt: r.updatedAt.slice(0, 10) });
-    case 'tasks': return clean({ id: r.id, title: r.title, status: Schema.TASK_STATUSES[r.status], deadline: r.deadline || null, overdue: r.status !== 'done' && r.deadline ? daysFromToday(r.deadline) < 0 : null, priority: Schema.PRIORITIES[r.priority] });
+    case 'tasks': return clean({ id: r.id, title: r.title, status: Schema.TASK_STATUSES[r.status], deadline: r.deadline || null, overdue: r.status !== 'done' && r.deadline ? daysFromToday(r.deadline) < 0 : null, priority: Schema.PRIORITIES[r.priority], openingPrep: r.prep || null });
     case 'expenses': return clean({ id: r.id, name: r.name, category: d.settings.budgetCategories.find(c => c.id === r.categoryId)?.name, planned: r.planned, paid: r.paid });
     case 'purchases': { const t = Calc.purchaseTotal(r); return clean({ id: r.id, title: r.title, status: Schema.PURCHASE_STATUSES[r.status], supplier: nameOf(d, 'suppliers', r.supplierId), supplierId: r.supplierId, expectedDate: r.expectedDate || null, total: money(t.total), itemsWithoutPrice: t.missing.length || null, inBudget: !!r.expenseId }); }
-    case 'reminders': { const f = fireAt(r); const p = f ? kyivParts(new Date(f)) : null; return clean({ id: r.id, title: r.title, state: r.status, when: p ? `${p.date} ${p.time}` : null, due: isDue(r), repeat: r.repeat !== 'none' ? r.repeat : null, link: r.link ? { ...r.link, name: nameOf(d, r.link.type + 's', r.link.id) } : null }); }
+    case 'reminders': { const f = fireAt(r); const p = f ? kyivParts(new Date(f)) : null; return clean({ id: r.id, title: r.title, state: r.status, when: p ? `${p.date} ${p.time}` : null, due: isDue(r), repeat: r.repeat !== 'none' ? r.repeat : null, link: r.link ? { ...r.link, name: nameOf(d, Schema.LINK_COLLECTION[r.link.type], r.link.id) } : null }); }
+    case 'premises': return clean({ id: r.id, name: r.name, address: r.address, status: PREMISES_STATUSES[r.status], leaseConfirmed: isLeaseConfirmed(r), rentPerMonth: r.rent, deposit: r.deposit, payDay: r.payDay, leaseStart: r.leaseStart || null, files: r.files.length || null });
+    case 'fitout': { const st = fitoutLink(d, r); return clean({ id: r.id, name: r.name, category: fitoutCategoryName(d, r.category), status: FITOUT_STATUSES[r.status], qty: r.qty, planned: r.planned, deadline: r.deadline || null, priority: Schema.PRIORITIES[r.priority], vendor: r.vendor, budget: st.state === 'none' ? 'не в бюджеті' : st.state === 'missing' ? 'статтю бюджету видалено' : { expenseId: st.expense.id, planned: st.expense.planned, paid: st.expense.paid ?? 0, mismatch: st.state === 'mismatch' || null }, taskId: r.taskId }); }
+    case 'monthly': return clean({ id: r.id, name: r.name, kind: MONTHLY_KINDS[r.kind], amount: r.amount, payDay: r.payDay, comment: cut(r.comment, 120), reminderId: r.reminderId });
     default: return { id: r.id };
   }
 }
@@ -55,8 +59,50 @@ function overview(d, now) {
     },
     budget: { total: b.total, needed: money(b.needed), paid: money(b.paid), toPay: money(b.toPay), free: money(b.free) },
     purchases: { plannedSum: money(p.planned), awaitingSum: money(p.awaiting), counts: p.count },
-    warnings: runChecks(d, now).map(c => ({ level: c.level, text: c.text })),
+    opening: (() => { const r = openingReadiness(d, now); return { openingDate: r.openingDate, daysLeft: r.daysLeft, premises: r.premises && { id: r.premises.id, title: r.premises.title, status: r.premises.status, leaseConfirmed: r.premises.leaseConfirmed }, prepTasks: r.prep, blockers: r.blockers.length, note: 'Деталі: get_opening_status' }; })(),
+    warnings: runChecks(d, now).map(c => ({ level: c.level, text: c.text, ref: c.ref || undefined })),
   };
+}
+
+/* ---------- Підготовка до відкриття ---------- */
+/** Стан підготовки з чітким поділом: підтверджені факти, плани/домовленості, невідоме. */
+function openingStatus(d, now) {
+  const r = openingReadiness(d, now); const pr = mainPremises(d); const fs = fitoutSummary(d, r.today); const ms = monthlySummary(d); const b = Calc.budget(d);
+  const confirmed = [], plans = [], unknown = [];
+  if (!r.openingDate) unknown.push('Планова дата відкриття не задана'); else plans.push(`Планова дата відкриття: ${r.openingDate} (через ${r.daysLeft} дн.)`);
+  if (!pr) unknown.push('Приміщення не записане');
+  else {
+    const t = pr.name || pr.address || 'приміщення';
+    (isLeaseConfirmed(pr) ? confirmed : plans).push(`Приміщення «${t}»: статус «${PREMISES_STATUSES[pr.status]}»${isLeaseConfirmed(pr) ? '' : ' — договір не підписано, оренда НЕ підтверджена'}`);
+    const where = isLeaseConfirmed(pr) ? confirmed : plans;
+    if (isNum(pr.rent)) where.push(`Оренда ${pr.rent} ₴/міс${isLeaseConfirmed(pr) ? ' (за договором)' : ' (домовленість, не підтверджено договором)'}`); else unknown.push('Сума оренди не вказана');
+    if (isNum(pr.deposit)) where.push(`Депозит ${pr.deposit} ₴`); else unknown.push('Депозит не вказано');
+    if (!pr.leaseStart) unknown.push('Дата початку оренди не вказана');
+    if (!pr.payDay) unknown.push('День оплати оренди не вказано');
+  }
+  return {
+    today: r.today, openingDate: r.openingDate, daysLeft: r.daysLeft,
+    facts: confirmed, plansAndAgreements: plans, unknown,
+    prepProgress: { ...r.prep, note: 'Рахується лише за завданнями, які користувач позначив як підготовку. Не є гарантією готовності.' },
+    blockers: r.blockers.map(x => ({ level: x.level, text: x.text, ref: x.ref || undefined })),
+    premises: pr ? { id: pr.id, status: PREMISES_STATUSES[pr.status], leaseConfirmed: isLeaseConfirmed(pr), budget: premisesBudgetPlan(d, pr).map(x => ({ part: x.label, amount: x.amount, inBudget: x.action === 'same' ? true : x.action === 'update' ? `так, але в бюджеті ${x.from}` : x.action === 'create' ? false : 'суму не вказано' })), nextRentPayment: pr.payDay ? nextPayDate(pr.payDay, r.today) : null, rentReminderId: pr.rentReminderId } : null,
+    fitout: { count: fs.count, byStatus: Object.fromEntries(Object.entries(fs.byStatus).map(([k, v]) => [FITOUT_STATUSES[k], v])), plannedSum: fs.planned, paidFromBudget: fs.paid, withoutPrice: fs.noPrice, notInBudget: fs.notInBudget, overdue: fs.overdue.map(i => ({ id: i.id, name: i.name, deadline: i.deadline })),
+      stillNeeded: d.fitout.filter(i => !['received', 'installed'].includes(i.status)).map(i => brief(d, 'fitout', i)).slice(0, LIST_LIMIT) },
+    budget: { total: b.total, needed: money(b.needed), paid: money(b.paid), toPay: money(b.toPay), free: money(b.free), note: 'Бюджет відкриття (разові витрати й депозит). Щомісячні витрати — окремо.' },
+    monthly: { total: ms.total, rentFromPremises: ms.rent ? { amount: ms.rent.amount, confirmed: ms.rent.confirmed } : null, withoutAmount: ms.missing.map(m => m.name), duplicatesIgnored: ms.duplicates.map(m => m.name) },
+    purchases: d.purchases.filter(p => p.status !== 'cancelled').map(p => { const st = purchaseLink(d, p); return st.state === 'mismatch' || st.state === 'missing' ? { id: p.id, title: p.title, budgetIssue: st.state === 'missing' ? 'статтю бюджету видалено' : `сума ${st.amount}, у бюджеті ${st.planned}` } : null; }).filter(Boolean),
+  };
+}
+function listFitout(d, status, category) {
+  const list = d.fitout.filter(i => (!status || status === 'all' || i.status === status) && (!category || i.category === category || fitoutCategoryName(d, i.category).toLowerCase() === String(category).toLowerCase()));
+  const s = fitoutSummary(d);
+  return { summary: { count: s.count, plannedSum: s.planned, paidFromBudget: s.paid, paidNote: 'Сплачене береться з пов’язаних статей бюджету' }, ...limited(d, 'fitout', list) };
+}
+function monthlyCosts(d) {
+  const s = monthlySummary(d); const b = Calc.budget(d);
+  return { totalPerMonth: s.total, rentFromPremises: s.rent, items: s.items.map(m => ({ ...brief(d, 'monthly', m), duplicateOfPremisesRent: m.duplicate || undefined })), withoutAmount: s.missing.length,
+    oneTimeOpening: money(b.nonRefundable), deposit: money(b.deposit.needed), breakevenFixed: d.settings.breakeven.fixed || null,
+    note: 'Щомісячні витрати не входять у бюджет відкриття. Разові витрати відкриття й депозит — окремо.' };
 }
 
 function listTasks(d, filter) {
@@ -108,7 +154,9 @@ function getRecord(d, col, id) {
   const r = d[col].find(x => x.id === id); need(r, `Запис ${col}/${id} не знайдено`);
   const rec = { ...r };
   if (col === 'products') { rec.photos = (r.photos || []).length; rec.unitCost = money(Calc.unitCost(r)); rec.priceAgeDays = ageDays(r.priceDate); rec.priceStale = rec.priceAgeDays !== null ? rec.priceAgeDays > STALE_PRICE_DAYS : null; rec.supplier = nameOf(d, 'suppliers', r.supplierId); }
-  if (col === 'purchases') rec.computed = Calc.purchaseTotal(r);
+  if (col === 'purchases') { rec.computed = Calc.purchaseTotal(r); const st = purchaseLink(d, r); rec.budgetLink = st.state; }
+  if (col === 'premises') { rec.files = r.files.map(f => ({ kind: f.kind, name: f.name })); rec.statusName = PREMISES_STATUSES[r.status]; rec.leaseConfirmed = isLeaseConfirmed(r); rec.budget = premisesBudgetPlan(d, r).map(x => ({ part: x.label, amount: x.amount, action: x.action })); }
+  if (col === 'fitout') { rec.categoryName = fitoutCategoryName(d, r.category); rec.budget = brief(d, 'fitout', r).budget; }
   if (col === 'reminders') rec.fireAtKyiv = fireAt(r) ? kyivParts(new Date(fireAt(r))) : null;
   if (col === 'suppliers') {
     rec.infoAgeDays = ageDays(r.checkedAt); rec.infoStale = !r.checkedAt || rec.infoAgeDays > STALE_SUPPLIER_DAYS;
@@ -180,7 +228,7 @@ function dataQuality(d) {
 
 /* ---------- Зміни з підтвердженням ---------- */
 const MAX_PHOTOS = 8;
-const PROTECTED = new Set(['id', 'createdAt', 'updatedAt', 'fireAt', 'photos']);
+const PROTECTED = new Set(['id', 'createdAt', 'updatedAt', 'fireAt', 'photos', 'files', 'source']);
 const show = v => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 /** Перевіряє пропоновані зміни й будує точний перелік «було → стане». Нічого не змінює. */
 export function planChanges(d, changes) {
@@ -198,11 +246,12 @@ export function planChanges(d, changes) {
     const fields = Object.fromEntries(Object.entries(c.fields || {}).filter(([k]) => !PROTECTED.has(k)));
     if (c.action === 'create') {
       const rec = Schema.normalizeRecord(c.collection, { ...fields, id: 'new' });
-      const title = rec.name || rec.title; need(String(title || '').trim(), 'У нового запису немає назви');
+      const title = rec.name || rec.title || rec.address; need(String(title || '').trim(), 'У нового запису немає назви');
       return { action: 'create', collection: c.collection, title, fields, diff: Object.keys(fields).map(k => ({ field: k, from: '—', to: show(rec[k]) })) };
     }
     const cur = d[c.collection].find(x => x.id === c.id); need(cur, `Запис ${c.collection}/${c.id} не знайдено`);
-    const title = cur.name || cur.title || cur.id;
+    const title = cur.name || cur.title || cur.address || cur.id;
+    need(!(c.action === 'delete' && c.collection === 'premises'), 'Приміщення з файлами видаляється лише в розділі «Приміщення»');
     if (c.action === 'delete') return { action: 'delete', collection: c.collection, id: cur.id, title, diff: [] };
     const next = Schema.normalizeRecord(c.collection, { ...cur, ...fields });
     const diff = Object.keys(fields).filter(k => JSON.stringify(cur[k]) !== JSON.stringify(next[k])).map(k => ({ field: k, from: show(cur[k]), to: show(next[k]) }));
@@ -243,6 +292,9 @@ export async function runTool(name, input, { repo, now = new Date(), importPhoto
     case 'compare_offers': return { result: compareOffers(d, input.query) };
     case 'check_purchase_plan': return { result: checkPurchasePlan(d, input.items, input.deliveryCost) };
     case 'data_quality': return { result: dataQuality(d) };
+    case 'get_opening_status': return { result: openingStatus(d, now) };
+    case 'list_fitout': return { result: listFitout(d, input.status || 'all', input.category) };
+    case 'get_monthly_costs': return { result: monthlyCosts(d) };
     case 'add_product_photos': {
       need(typeof importPhoto === 'function', 'Фото за посиланням можна додавати лише після входу в обліковий запис');
       const items = (Array.isArray(input.items) ? input.items : []).slice(0, 30);
@@ -270,7 +322,7 @@ export async function runTool(name, input, { repo, now = new Date(), importPhoto
     case 'create_task': {
       need(String(input.title || '').trim(), 'Потрібна назва завдання');
       need(!input.deadline || isDate(input.deadline), 'Термін має бути у форматі YYYY-MM-DD');
-      const fields = { title: input.title.trim(), deadline: input.deadline || '', priority: input.priority || 'medium', description: input.notes || '' };
+      const fields = { title: input.title.trim(), deadline: input.deadline || '', priority: input.priority || 'medium', description: input.notes || '', prep: input.prep === true };
       if (input.supplierId && d.suppliers.some(s => s.id === input.supplierId)) fields.supplierId = input.supplierId;
       const r = await repo.create('tasks', fields);
       return { result: { created: true, collection: 'tasks', id: r.id, title: r.title, deadline: r.deadline || null }, effect: { type: 'created', collection: 'tasks', id: r.id, title: r.title } };
@@ -287,7 +339,7 @@ export async function runTool(name, input, { repo, now = new Date(), importPhoto
       need(isDate(input.date), 'Дата має бути у форматі YYYY-MM-DD');
       need(/^([01]\d|2[0-3]):[0-5]\d$/.test(input.time || ''), 'Час має бути у форматі HH:MM');
       let link = null;
-      if (input.linkType && input.linkId) { need(d[input.linkType + 's']?.some(x => x.id === input.linkId), 'Пов’язаний запис не знайдено'); link = { type: input.linkType, id: input.linkId }; }
+      if (input.linkType && input.linkId) { need(d[Schema.LINK_COLLECTION[input.linkType]]?.some(x => x.id === input.linkId), 'Пов’язаний запис не знайдено'); link = { type: input.linkType, id: input.linkId }; }
       const r = await repo.create('reminders', { title: input.title.trim(), date: input.date, time: input.time, repeat: input.repeat || 'none', status: 'planned', link });
       const p = kyivParts(new Date(r.fireAt));
       return { result: { created: true, collection: 'reminders', id: r.id, title: r.title, when: `${p.date} ${p.time} (Київ)`, inPast: new Date(r.fireAt) <= now }, effect: { type: 'created', collection: 'reminders', id: r.id, title: r.title } };

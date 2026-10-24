@@ -5,10 +5,10 @@ import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, emptyState, ext, supplierName } from '../shared.js';
 
 /* ---------- 3. Товари ---------- */
-export const FORMULAS = `<div class="formula">
+export const FORMULAS = `<details class="explain"><summary>Формули</summary><div class="formula">
   <span><b>Ціна одиниці</b> = ціна упаковки ÷ кількість одиниць в упаковці</span>
   <span><b>Націнка</b> = (роздрібна ціна − ціна одиниці) ÷ ціна одиниці × 100%</span>
-  <span><b>Маржа</b> = (роздрібна ціна − ціна одиниці) ÷ роздрібна ціна × 100%</span></div>`;
+  <span><b>Маржа</b> = (роздрібна ціна − ціна одиниці) ÷ роздрібна ціна × 100%</span></div></details>`;
 export function productMobile(list, showSupplier) {
   return `<div class="m-list only-m">${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);

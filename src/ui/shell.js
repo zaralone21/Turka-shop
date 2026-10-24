@@ -4,6 +4,7 @@ import { Repo } from '../core/repo.js';
 import { esc } from '../core/utils.js';
 import { AI } from './ai.js';
 import { notifUnread } from './notifications.js';
+import { hydrateFiles } from './files.js';
 import { hydratePhotos } from './photos.js';
 import { D, NAV_GROUPS, PAGES, UI, VIEWS, isOverdue, pageTitle, root } from './shared.js';
 
@@ -22,6 +23,9 @@ export const ICON = {
   budget: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/>',
   breakeven: '<path d="M4 20V4M4 20h16M7 15l4-4 3 3 5-6"/>',
   data: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  premises: '<path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/>',
+  fitout: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+  monthly: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15h3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   note: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/>',
@@ -32,9 +36,9 @@ export const ICON = {
 };
 export const svg = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICON[name]}</svg>`;
 export const TABS = [['home', 'Головна'], ['planner', 'Планер'], ['ai', 'AI'], ['suppliers', 'Постачальники'], ['more', 'Ще']];
-export const MORE_PAGES = ['reminders', 'products', 'purchases', 'notes', 'budget', 'breakeven', 'data'];
+export const MORE_PAGES = ['reminders', 'premises', 'fitout', 'products', 'purchases', 'notes', 'budget', 'monthly', 'breakeven', 'data'];
 /* Що додає кнопка «+» у кожному розділі. */
-export const FAB_ACTION = { suppliers: 'add-supplier', products: 'add-product', notes: 'add-note', planner: 'add-task', budget: 'add-expense', purchases: 'add-purchase', reminders: 'add-reminder' };
+export const FAB_ACTION = { suppliers: 'add-supplier', products: 'add-product', notes: 'add-note', planner: 'add-task', budget: 'add-expense', purchases: 'add-purchase', reminders: 'add-reminder', fitout: 'add-fitout', monthly: 'add-monthly' };
 
 function syncBadge() {
   const st = Repo.status;
@@ -105,6 +109,7 @@ export function render() {
   AI.afterRender();
   restoreEditing(keep);
   hydratePhotos(root);
+  hydrateFiles(root);
 }
 export function banners() {
   const st = Repo.status; let h = '';

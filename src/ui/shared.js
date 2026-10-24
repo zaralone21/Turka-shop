@@ -8,14 +8,15 @@ import { daysFromToday, esc, fmtDate, plural } from '../core/utils.js';
 /* Розділи: [id, назва, група меню]. */
 export const PAGES = [
   ['home', 'Головна', 'work'], ['planner', 'Планер', 'work'], ['reminders', 'Нагадування', 'work'], ['ai', 'AI-менеджер', 'work'],
+  ['premises', 'Приміщення', 'open'], ['fitout', 'Облаштування', 'open'],
   ['suppliers', 'Постачальники', 'shop'], ['products', 'Товари та ціни', 'shop'], ['purchases', 'Закупівлі', 'shop'], ['notes', 'Нотатки', 'shop'],
-  ['budget', 'Бюджет відкриття', 'money'], ['breakeven', 'Беззбитковість', 'money'],
+  ['budget', 'Бюджет відкриття', 'money'], ['monthly', 'Щомісячні витрати', 'money'], ['breakeven', 'Беззбитковість', 'money'],
   ['data', 'Дані й акаунт', 'sys'],
 ];
-export const NAV_GROUPS = { work: 'Робота', shop: 'Магазин', money: 'Гроші', sys: '' };
+export const NAV_GROUPS = { work: 'Робота', open: 'Відкриття точки', shop: 'Магазин', money: 'Гроші', sys: '' };
 export const UI = {
-  page: 'home', supplierId: null, keepScroll: true, aiOpen: false, chatId: null,
-  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', supCat: '', noteQ: '', noteTag: '', taskStatus: '', purStatus: '', remShowDone: false },
+  page: 'home', supplierId: null, premisesId: null, regroupHidden: false, keepScroll: true, aiOpen: false, chatId: null,
+  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', supCat: '', fitCat: '', fitStatus: '', noteQ: '', noteTag: '', taskStatus: '', purStatus: '', remShowDone: false },
 };
 export const root = document.getElementById('root');
 export const D = () => Repo.data;
