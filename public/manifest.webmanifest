@@ -1,13 +1,13 @@
 {
-  "name": "Підготовка магазину",
-  "short_name": "Магазин",
-  "description": "Робочий дашборд відкриття магазину білизни, шкарпеток і домашніх тапок",
+  "name": "КОМФОРТ home",
+  "short_name": "КОМФОРТ",
+  "description": "КОМФОРТ home: робочий дашборд відкриття магазину білизни, шкарпеток і домашніх тапок",
   "lang": "uk",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F4F5F7",
-  "theme_color": "#FFFFFF",
+  "background_color": "#FAF7F2",
+  "theme_color": "#F7F2ED",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },

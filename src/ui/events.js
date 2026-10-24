@@ -113,6 +113,12 @@ document.addEventListener('input', e => {
 document.addEventListener('submit', async e => {
   const f = e.target;
   if (f.dataset.form === 'ai-chat') { e.preventDefault(); AI.submit(f.q.value); return; }
+  if (f.dataset.form === 'quick-note') {
+    e.preventDefault(); const body = f.q.value.trim(); if (!body) { f.q.focus(); return; }
+    f.q.value = ''; f.q.blur();
+    const first = body.split('\n')[0]; await Repo.create('notes', { title: first.length > 60 ? first.slice(0, 57) + '…' : first, body });
+    toast('Нотатку збережено'); return;
+  }
   if (f.dataset.form === 'ai-ask') { e.preventDefault(); const q = f.q.value.trim(); if (q) AI.ask(q); return; }
   if (f.dataset.form !== 'total-budget') return; e.preventDefault();
   const n = parseNum(f.total.value);

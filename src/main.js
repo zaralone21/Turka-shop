@@ -24,9 +24,11 @@ import { OPENING_ACTIONS } from './ui/opening.js';
 import { ACTIONS } from './ui/events.js';
 import { initNotifications } from './ui/notifications.js';
 import { AI } from './ui/ai.js';
+import { initTheme, toggleTheme } from './ui/theme.js';
 
 /* Запуск застосунку. */
-Object.assign(ACTIONS, OPENING_ACTIONS);
+Object.assign(ACTIONS, OPENING_ACTIONS, { 'theme-toggle': () => toggleTheme() });
+initTheme();
 Repo.onChange(render);
 document.documentElement.lang = 'uk';
 (async () => {

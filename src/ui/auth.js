@@ -1,6 +1,7 @@
 import { Cloud } from '../core/cloud.js';
 import { esc } from '../core/utils.js';
 import { root } from './shared.js';
+import { brandHtml, themeBtn } from './shell.js';
 
 /* Екран входу. Без входу дані облікового запису недоступні. */
 const MSG = {
@@ -13,8 +14,9 @@ const tr = e => MSG[e?.message] || (/password/i.test(e?.message || '') && /6|sho
 export function renderAuth(mode = 'signin', note = '') {
   const titles = { signin: 'Вхід', signup: 'Реєстрація', forgot: 'Відновлення пароля', newpass: 'Новий пароль' };
   const btn = { signin: 'Увійти', signup: 'Зареєструватися', forgot: 'Надіслати лист', newpass: 'Зберегти пароль' };
-  root.innerHTML = `<div class="auth"><form class="panel" id="auth-form" novalidate>
-    <div><h1 style="font-size:1.3rem">${titles[mode]}</h1><p class="small muted" style="margin:4px 0 0">Магазин білизни, шкарпеток і тапок: робочий дашборд.</p></div>
+  root.innerHTML = `<div class="auth"><div class="auth-top">${themeBtn()}</div><form class="panel" id="auth-form" novalidate>
+    ${brandHtml()}
+    <div><h1 style="font-size:1.45rem">${titles[mode]}</h1><p class="small muted" style="margin:4px 0 0">Робочий дашборд відкриття магазину білизни, шкарпеток і тапок.</p></div>
     ${note ? `<div class="callout info">${note}</div>` : ''}<div class="form-error" hidden></div>
     ${mode !== 'newpass' ? '<label class="field"><span class="lbl">Email</span><input class="input" id="auth-email" name="email" type="email" autocomplete="email" required></label>' : ''}
     ${mode === 'signin' || mode === 'signup' || mode === 'newpass' ? `<label class="field"><span class="lbl">Пароль</span><input class="input" id="auth-pass" name="password" type="password" autocomplete="${mode === 'signin' ? 'current-password' : 'new-password'}" minlength="8" required>${mode !== 'signin' ? '<span class="hint">Щонайменше 8 символів.</span>' : ''}</label>` : ''}
