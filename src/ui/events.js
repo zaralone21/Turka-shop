@@ -11,13 +11,13 @@ import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
-import { D, PAGES, UI, pageTitle, toast } from './shared.js';
+import { D, NAV, UI, resolvePage, sectionOf, toast } from './shared.js';
 import { FAB_ACTION, MORE_PAGES, render, svg } from './shell.js';
 
 /* =====================================================================
    8. ОБРОБКА ПОДІЙ (делегування)
    ===================================================================== */
-export function go(page) { UI.page = page; UI.aiOpen = false; if (page !== 'suppliers') UI.supplierId = null; UI.keepScroll = false; closeModal(); render(); window.scrollTo(0, 0); try { history.replaceState(null, '', '#' + page); } catch {} }
+export function go(page) { page = resolvePage(page) || 'home'; const sec = sectionOf(page); if (sec) UI.lastTab[sec] = page; UI.page = page; UI.aiOpen = false; if (page !== 'suppliers') UI.supplierId = null; UI.keepScroll = false; closeModal(); render(); window.scrollTo(0, 0); try { history.replaceState(null, '', '#' + page); } catch {} }
 export const ACTIONS = {
   'fab': () => { const a = FAB_ACTION[UI.page]; if (a) ACTIONS[a]({ dataset: {} }); else quickAddSheet(); },
   'quick-add': () => quickAddSheet(),
@@ -45,7 +45,7 @@ export const ACTIONS = {
   'edit-sections': () => sectionsForm(),
   'regroup': () => regroupDialog(),
   'regroup-hide': () => { UI.regroupHidden = true; render(); },
-  'add-task': () => taskForm(), 'edit-task': el => taskForm(el.dataset.id),
+  'add-task': () => taskForm(), 'add-prep-task': () => taskForm(null, { prep: true }), 'edit-task': el => taskForm(el.dataset.id),
   'del-task': async el => { const t = Repo.get('tasks', el.dataset.id); if (await confirmDialog({ title: 'Видалити завдання?', text: `<p style="margin:0">«${esc(t.title)}» буде видалено разом із чеклістом.</p>` })) { await Repo.remove('tasks', t.id); toast('Завдання видалено'); } },
   'task-done': async el => { await Repo.update('tasks', el.dataset.id, { status: 'done' }); toast('Завдання виконано'); },
   'add-expense': () => expenseForm(), 'edit-expense': el => expenseForm(el.dataset.id),
@@ -75,12 +75,18 @@ export function sheet(title, items) {
   openModal({ title, narrow: true, body: `<div class="modal-b"><div class="sheet-list">${items.map(([key, icon, label], i) => `<button class="btn" data-sheet="${i}">${svg(icon)}${label}</button>`).join('')}</div></div>`,
     onMount: m => m.querySelectorAll('[data-sheet]').forEach(b => b.onclick = () => { closeModal(); items[+b.dataset.sheet][3](); }) });
 }
-export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => [id, id, pageTitle(id), () => go(id)])); }
+/** Незбережений текст у полях сторінки (позначені data-unsaved): перед переходом перепитуємо. */
+export async function guardedGo(page) {
+  const dirty = [...document.querySelectorAll('#root [data-unsaved]')].some(el => el.value && el.value.trim());
+  if (dirty && !(await confirmDialog({ title: 'Перейти без збереження?', ok: 'Перейти', danger: false, text: '<p style="margin:0">У полі на цій сторінці є незбережений текст. Після переходу він зникне.</p>' }))) return;
+  go(page);
+}
+export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => { const n = NAV.find(x => x[0] === id) || [id, id === 'data' ? 'Дані й акаунт' : id, id]; return [id, n[2], n[1], () => guardedGo(id)]; })); }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
 Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
 document.addEventListener('click', e => {
-  const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else go(tab.dataset.tab); return; }
-  const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { go(nav.dataset.nav); return; }
+  const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else guardedGo(tab.dataset.tab); return; }
+  const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { guardedGo(nav.dataset.nav); return; }
   const el = e.target.closest('[data-act]'); if (!el || (modalEl && modalEl.contains(el))) return;
   const a = el.dataset.act; if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'file') return;
   if (ACTIONS[a]) { e.preventDefault(); ACTIONS[a](el); }
@@ -126,4 +132,6 @@ document.addEventListener('submit', async e => {
   await Repo.setSettings({ totalBudget: n }); toast(n === null ? 'Бюджет очищено' : 'Бюджет збережено');
 });
 window.addEventListener('storage', e => { if (e.key === (Repo.status.demo ? KEYS.demo : KEYS.data)) Repo.reloadFromStorage(); });
-window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (PAGES.some(p => p[0] === h)) go(h); });
+window.addEventListener('hashchange', () => { const h = resolvePage(location.hash.slice(1)); if (h && h !== UI.page) go(h); });
+/* Меню «Ще» закривається після вибору дії або кліку поза ним. */
+document.addEventListener('click', e => { document.querySelectorAll('details.more-menu[open]').forEach(m => { if (!m.querySelector('summary').contains(e.target)) m.open = false; }); });

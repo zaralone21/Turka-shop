@@ -212,7 +212,7 @@ function chatHtml(compact) {
 VIEWS.ai = () => {
   if (S.state === 'unknown') refreshStatus();
   const list = chats();
-  return `<div class="page-head"><div><h1>AI-менеджер</h1><p>${statusPill()}${S.model ? ` <span class="small muted">${esc(S.model)}</span>` : ''}</p></div><button class="btn" data-act="ai-new">+ Нова розмова</button></div>
+  return `<div class="page-head"><div><p>${statusPill()}${S.model ? ` <span class="small muted">${esc(S.model)}</span>` : ''}</p></div><button class="btn" data-act="ai-new">+ Нова розмова</button></div>
   <div class="ai-layout">
     <div class="ai-chats" aria-label="Розмови">${list.length ? list.map(c => `<button class="li-btn ${c.id === UI.chatId ? 'on' : ''}" data-act="ai-chat" data-id="${c.id}">${esc(c.title || 'Розмова')}<div class="small muted">${fmtDate(c.updatedAt)}</div></button>`).join('') : '<p class="small muted" style="margin:0">Історія розмов з’явиться тут.</p>'}
       ${list.length && UI.chatId ? `<button class="btn sm ghost danger" data-act="ai-del" data-id="${UI.chatId}" style="margin-top:8px">Видалити розмову</button>` : ''}</div>

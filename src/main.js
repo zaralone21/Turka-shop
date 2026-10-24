@@ -3,7 +3,7 @@ import { Cloud } from './core/cloud.js';
 import { Repo } from './core/repo.js';
 import { renderAuth } from './ui/auth.js';
 import { openData } from './ui/session.js';
-import { PAGES, UI } from './ui/shared.js';
+import { UI, resolvePage, sectionOf } from './ui/shared.js';
 import { render } from './ui/shell.js';
 import './ui/views/home.js';
 import './ui/views/suppliers.js';
@@ -15,6 +15,7 @@ import './ui/views/breakeven.js';
 import './ui/views/data.js';
 import './ui/views/purchases.js';
 import './ui/views/reminders.js';
+import './ui/views/opening.js';
 import './ui/views/premises.js';
 import './ui/views/fitout.js';
 import './ui/views/monthly.js';
@@ -32,7 +33,7 @@ initTheme();
 Repo.onChange(render);
 document.documentElement.lang = 'uk';
 (async () => {
-  const h = location.hash.slice(1); if (PAGES.some(p => p[0] === h)) UI.page = h;
+  const h = resolvePage(location.hash.slice(1)); if (h) { UI.page = h; const sec = sectionOf(h); if (sec) UI.lastTab[sec] = h; }
   if (Cloud.configured) {
     Cloud.init();
     let opened = false;

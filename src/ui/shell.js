@@ -8,7 +8,7 @@ import { hydrateFiles } from './files.js';
 import { hydratePhotos } from './photos.js';
 import { BRAND, cottonLogo } from './brand.js';
 import { currentTheme, themeLabel } from './theme.js';
-import { D, NAV_GROUPS, PAGES, UI, VIEWS, isOverdue, pageTitle, root } from './shared.js';
+import { D, NAV, SECTIONS, UI, VIEWS, headTitle, isOverdue, root, sectionOf } from './shared.js';
 
 /* ---------- каркас ---------- */
 export const ICON = {
@@ -51,10 +51,10 @@ export const longToday = () => {
   return `${wd.charAt(0).toUpperCase() + wd.slice(1)}, ${dm} ${y}`;
 };
 export const brandHtml = () => `<div class="brand">${cottonLogo()}<div class="nm"><b>КОМФОРТ <i>home</i></b><span>білизна · шкарпетки · тапки</span></div></div>`;
-export const TABS = [['home', 'Головна'], ['planner', 'Планер'], ['ai', 'AI'], ['suppliers', 'Постачальники'], ['more', 'Ще']];
-export const MORE_PAGES = ['reminders', 'premises', 'fitout', 'products', 'purchases', 'notes', 'budget', 'monthly', 'breakeven', 'data'];
+export const TABS = [['home', 'Головна', 'home'], ['planner', 'Планер', 'planner'], ['opening', 'Відкриття', 'premises'], ['finance', 'Фінанси', 'budget'], ['more', 'Ще', 'more']];
+export const MORE_PAGES = ['suppliers', 'products', 'purchases', 'notes', 'ai', 'data'];
 /* Що додає кнопка «+» у кожному розділі. */
-export const FAB_ACTION = { suppliers: 'add-supplier', products: 'add-product', notes: 'add-note', planner: 'add-task', budget: 'add-expense', purchases: 'add-purchase', reminders: 'add-reminder', fitout: 'add-fitout', monthly: 'add-monthly' };
+export const FAB_ACTION = { suppliers: 'add-supplier', products: 'add-product', notes: 'add-note', planner: 'add-task', opening: 'add-prep-task', budget: 'add-expense', purchases: 'add-purchase', reminders: 'add-reminder', fitout: 'add-fitout', monthly: 'add-monthly' };
 
 function syncBadge() {
   const st = Repo.status;
@@ -88,15 +88,11 @@ export function render() {
   const d = D(); const openTasks = d.tasks.filter(t => t.status !== 'done'); const overdue = openTasks.filter(isOverdue).length;
   const dueRem = d.reminders.filter(r => isDue(r)).length;
   const bell = dueRem + notifUnread();
-  const counts = { suppliers: d.suppliers.length, products: d.products.length, notes: d.notes.length, planner: openTasks.length, budget: d.expenses.length, purchases: d.purchases.filter(p => p.status !== 'received' && p.status !== 'cancelled').length, reminders: d.reminders.filter(r => r.status !== 'done').length };
-  const alerts = { planner: overdue, reminders: dueRem };
-  let lastGroup = null;
-  const navHtml = PAGES.map(([id, label, group]) => {
-    const head = group !== lastGroup && NAV_GROUPS[group] ? `<div class="nav-group">${NAV_GROUPS[group]}</div>` : group !== lastGroup && lastGroup ? '<div class="nav-group"></div>' : '';
-    lastGroup = group;
-    const c = alerts[id] ? `<span class="cnt alert">${alerts[id]}</span>` : counts[id] ? `<span class="cnt">${counts[id]}</span>` : '';
-    return `${head}<button data-nav="${id}" class="${UI.page === id ? 'on' : ''}" ${UI.page === id ? 'aria-current="page"' : ''}>${svg(id)}<span class="lbl">${label}</span>${c}</button>`;
-  }).join('');
+  // Лічильники лише там, де вони вимагають уваги: прострочені завдання, нагадування, що настали.
+  const alerts = { planner: overdue + dueRem };
+  const cur = sectionOf(UI.page) || UI.page;
+  const navBtn = ([id, label, icon]) => `<button data-nav="${id}" class="${cur === id ? 'on' : ''}" ${cur === id ? 'aria-current="page"' : ''}>${svg(icon)}<span class="lbl">${label}</span>${alerts[id] ? `<span class="cnt alert" aria-label="потребують уваги: ${alerts[id]}">${alerts[id]}</span>` : ''}</button>`;
+  const navHtml = NAV.map(navBtn).join('');
   const scroll = window.scrollY;
   const keep = editingState();
   const showFab = FAB_ACTION[UI.page] || UI.page === 'home';
@@ -105,22 +101,22 @@ export function render() {
     <aside class="side">
       ${brandHtml()}
       <nav class="nav" aria-label="Розділи">${navHtml}</nav>
-      <div class="side-foot">${syncBadge()}</div>
+      <div class="side-foot"><nav class="nav" aria-label="Обліковий запис">${navBtn(['data', 'Дані й акаунт', 'data'])}</nav>${syncBadge()}</div>
     </aside>
     <main class="main">
       <header class="header"><div class="header-in">
-        ${UI.page === 'home' ? `<div class="ttl hero-h hide-m"><span class="hero-date">${esc(longToday())}</span><h1>Ваш магазин починається тут</h1></div>` : ''}
-        <div class="ttl ${UI.page === 'home' ? 'only-m-flex' : ''}"><span class="m-logo">${cottonLogo('logo-s')}</span>${UI.page === 'home' ? BRAND.replace('home', '<i>home</i>') : esc(pageTitle(UI.page))}${Repo.status.demo ? ' <span class="pill warn">Демо</span>' : ''}</div>
+        ${UI.page === 'home' ? `<div class="ttl hero-h hide-m"><span class="hero-date">${esc(longToday())}</span><h1>Ваш магазин починається тут</h1></div>` : '<div class="ttl hide-m"></div>'}
+        <div class="ttl only-m-flex"><span class="m-logo">${cottonLogo('logo-s')}</span>${BRAND.replace('home', '<i>home</i>')}</div>
         ${UI.page === 'ai' ? '' : `<button class="icon-btn" data-act="ai-open" aria-label="AI-менеджер">${svg('ai')}<span class="hide-h">AI</span></button>`}
         ${themeBtn()}
         <button class="icon-btn" data-act="notif-open" aria-label="Сповіщення${bell ? `: ${bell} нових` : ''}">${svg('bell')}${bell ? `<i class="badge">${bell}</i>` : ''}</button>
         <button class="icon-btn primary hide-m" data-act="quick-add" aria-label="Додати запис">${svg('plus')}<span>Додати</span></button>
       </div></header>
-      <div class="wrap">${banners()}${VIEWS[UI.page]()}</div>
+      <div class="wrap">${banners()}${pageHead()}${VIEWS[UI.page]()}</div>
     </main>
   </div>
-  <nav class="tabbar" aria-label="Розділи">${TABS.map(([id, label]) => { const on = id === 'more' ? MORE_PAGES.includes(UI.page) : UI.page === id;
-    return `<button data-tab="${id}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}>${svg(id)}<span>${label}</span>${id === 'planner' && overdue ? `<i class="badge">${overdue}</i>` : ''}</button>`; }).join('')}</nav>
+  <nav class="tabbar" aria-label="Розділи">${TABS.map(([id, label, icon]) => { const on = id === 'more' ? MORE_PAGES.includes(cur) : cur === id;
+    return `<button data-tab="${id}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}>${svg(icon)}<span>${label}</span>${alerts[id] ? `<i class="badge">${alerts[id]}</i>` : ''}</button>`; }).join('')}</nav>
   ${showFab && !(UI.page === 'suppliers' && UI.supplierId) ? `<button class="fab" data-act="fab" aria-label="Додати">${svg('plus')}</button>` : ''}
   ${UI.aiOpen && UI.page !== 'ai' ? AI.drawerHtml() : ''}`;
   if (UI.keepScroll) window.scrollTo(0, scroll); UI.keepScroll = true;
@@ -128,6 +124,13 @@ export function render() {
   restoreEditing(keep);
   hydratePhotos(root);
   hydrateFiles(root);
+}
+/** Одна назва сторінки; для розділів із вкладками — назва розділу й вкладки. */
+function pageHead() {
+  if (UI.page === 'home') return '';
+  const sec = sectionOf(UI.page);
+  const tabs = sec ? `<div class="tabs" role="tablist" aria-label="${SECTIONS[sec].name}">${SECTIONS[sec].tabs.map(([id, label]) => `<button role="tab" data-nav="${id}" class="tab ${UI.page === id ? 'on' : ''}" aria-selected="${UI.page === id}">${label}</button>`).join('')}</div>` : '';
+  return `<div class="page-title"><h1>${esc(headTitle(UI.page))}</h1>${tabs}</div>`;
 }
 export function banners() {
   const st = Repo.status; let h = '';

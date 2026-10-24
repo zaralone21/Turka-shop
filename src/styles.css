@@ -617,3 +617,36 @@ img, .photo-img, .thumb, .gallery-img { filter: none; }
   .header-in .ttl { font-size: 1.08rem; }
 }
 @media (min-width: 901px) { .app { background: linear-gradient(to right, var(--sidebar) 239px, var(--border) 239px, var(--border) 240px, transparent 240px); } }
+
+/* ---------- Навігація з вкладками, спрощена головна ---------- */
+.page-title { display: flex; flex-direction: column; gap: 10px; }
+.page-title h1 { font-size: 1.85rem; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { all: unset; box-sizing: border-box; cursor: pointer; padding: 9px 14px; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; border-radius: 10px 10px 0 0; }
+.tab:hover { color: var(--text); background: var(--surface-hover); }
+.tab.on { color: var(--accent-text); border-bottom-color: var(--primary); font-weight: 600; }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rec-title { font-family: var(--serif); font-weight: 600; font-size: 1.45rem; }
+.side-foot .nav { margin-bottom: 4px; }
+.home-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.home-2 .panel-head h2 .ico-c { margin-right: 2px; }
+.li-ico { flex: none; width: 24px; display: inline-flex; justify-content: center; color: var(--accent-text); margin-top: 2px; align-self: flex-start; }
+.li-ico svg { width: 20px; height: 20px; }
+.hb-open { background: var(--banner); border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
+.hb-open .ico-c { background: var(--surface); }
+.next-step { margin-top: 14px; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--primary) 18%, transparent); }
+.next-step .k { display: block; font-size: .8rem; color: var(--text-muted); margin-bottom: 4px; }
+.next-step .dot { margin-top: 7px; }
+.more-menu { position: relative; }
+.more-menu > summary { list-style: none; }
+.more-menu > summary::-webkit-details-marker { display: none; }
+.more-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 220px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; }
+.more-pop .btn { justify-content: flex-start; width: 100%; }
+@media (max-width: 900px) {
+  .home-2 { grid-template-columns: minmax(0, 1fr); }
+  .page-title h1 { font-size: 1.5rem; }
+  .tab { padding: 9px 11px; font-size: .92rem; }
+}
+.hint-list .btn.link, .next-step .btn.link { min-height: 0; padding: 0; line-height: 1.45; }
+.header-in .ttl { min-width: 0; overflow: hidden; }

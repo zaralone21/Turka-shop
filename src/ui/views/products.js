@@ -2,7 +2,7 @@ import { Calc } from '../../core/calc.js';
 import { NO_SECTION, SORTS, groupProducts, planRegroup, sectionOrder } from '../../core/sections.js';
 import { byText, daysFromToday, esc, fmtDate, fmtMoney, fmtNum, fmtPct, isNum, plural } from '../../core/utils.js';
 import { photoImg } from '../photos.js';
-import { D, UI, VIEWS, emptyState, ext, supplierName } from '../shared.js';
+import { D, UI, VIEWS, emptyState, ext, supplierName, moreMenu } from '../shared.js';
 
 /* ---------- 3. Товари ---------- */
 export const FORMULAS = `<details class="explain"><summary>Формули</summary><div class="formula">
@@ -53,7 +53,7 @@ VIEWS.products = () => {
   const subs = UI.f.prodCat && UI.f.prodCat !== NO_SECTION ? [...new Set([...(sections.find(s => s.name === UI.f.prodCat)?.subs || []), ...inCat.map(p => p.subcategory).filter(Boolean)])] : [];
   if (!subs.includes(UI.f.prodSub) && UI.f.prodSub !== NO_SECTION) UI.f.prodSub = '';
   const list = UI.f.prodSub === NO_SECTION ? inCat.filter(p => !p.subcategory) : UI.f.prodSub ? inCat.filter(p => p.subcategory === UI.f.prodSub) : inCat;
-  const head = `<div class="page-head"><div><h1>Товари та ціни</h1><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row"><button class="btn" data-act="edit-sections">Розділи</button><button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
+  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row">${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
   if (!d.products.length) return head + emptyState('Додайте товар з ціною закупівлі та плановою роздрібною ціною, і націнка з маржею порахуються автоматично.', 'add-product', 'Додати перший товар') + FORMULAS;
   const plan = planRegroup(d), toMove = plan.products.length + plan.suppliers.length;
   const noCat = base.filter(p => !p.category).length;
