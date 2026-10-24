@@ -1,4 +1,5 @@
 import { Calc } from './calc.js';
+import { fitoutLink, isLeaseConfirmed, mainPremises, monthlySummary, premisesBudgetPlan, purchaseLink, PREMISES_STATUSES } from './opening.js';
 import { isDue } from './reminders.js';
 import { daysFromToday, fmtMoney, plural } from './utils.js';
 
@@ -30,5 +31,31 @@ export function runChecks(d, now = new Date()) {
   if (noContacts.length) add('info', `${noContacts.length} ${plural(noContacts.length, 'постачальник без', 'постачальники без', 'постачальників без')} жодного контакту`, 'suppliers');
   const late = d.purchases.filter(p => (p.status === 'ordered' || p.status === 'awaiting') && p.expectedDate && daysFromToday(p.expectedDate) < 0);
   if (late.length) add('warn', `${late.length} ${plural(late.length, 'закупівля запізнюється', 'закупівлі запізнюються', 'закупівель запізнюються')}`, 'purchases');
+  openingChecks(d, add);
   return out;
+}
+
+/** Перевірки підготовки до відкриття. Кожна має посилання на конкретний запис. */
+function openingChecks(d, add) {
+  const pr = mainPremises(d);
+  if (pr && !isLeaseConfirmed(pr)) add('warn', `Приміщення «${pr.name || pr.address || 'без назви'}»: ${PREMISES_STATUSES[pr.status].toLowerCase()}, договір ще не підписано`, 'premises', { collection: 'premises', id: pr.id });
+  if (pr) {
+    const miss = premisesBudgetPlan(d, pr).filter(x => x.action === 'create' && (x.part === 'rent' || x.part === 'deposit'));
+    if (miss.length) add('info', `${miss.map(x => x.label).join(' і ')} ще не внесено в бюджет відкриття`, 'premises', { collection: 'premises', id: pr.id });
+  }
+  const lateFit = d.fitout.filter(i => i.deadline && daysFromToday(i.deadline) < 0 && i.status !== 'installed' && i.status !== 'received');
+  lateFit.slice(0, 3).forEach(i => add('warn', `Облаштування: минув термін «${i.name}»`, 'fitout', { collection: 'fitout', id: i.id }));
+  for (const p of d.purchases) {
+    if (p.status === 'cancelled') continue;
+    const st = purchaseLink(d, p);
+    if (st.state === 'missing') add('warn', `Закупівля «${p.title}»: статтю бюджету видалено`, 'purchases', { collection: 'purchases', id: p.id });
+    else if (st.state === 'mismatch') add('warn', `Закупівля «${p.title}»: сума ${fmtMoney(st.amount)}, у бюджеті ${fmtMoney(st.planned)}`, 'purchases', { collection: 'purchases', id: p.id });
+  }
+  for (const i of d.fitout) {
+    const st = fitoutLink(d, i);
+    if (st.state === 'missing') add('warn', `Облаштування «${i.name}»: статтю бюджету видалено`, 'fitout', { collection: 'fitout', id: i.id });
+    else if (st.state === 'mismatch' && d.fitout.filter(x => x.expenseId === i.expenseId).length === 1) add('warn', `Облаштування «${i.name}»: сума ${fmtMoney(st.amount)}, у бюджеті ${fmtMoney(st.planned)}`, 'fitout', { collection: 'fitout', id: i.id });
+  }
+  const ms = monthlySummary(d);
+  if (ms.missing.length) add('info', `${ms.missing.length} ${plural(ms.missing.length, 'щомісячна стаття', 'щомісячні статті', 'щомісячних статей')} без суми`, 'monthly', ms.missing.length === 1 ? { collection: 'monthly', id: ms.missing[0].id } : null);
 }

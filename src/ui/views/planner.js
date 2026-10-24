@@ -20,7 +20,7 @@ export function taskCard(t) {
   const dn = t.checklist.filter(i => i.done).length, total = t.checklist.length, isDone = t.status === 'done';
   return `<article class="task ${isOverdue(t) ? 'overdue' : ''} ${isDone ? 'done' : ''}">
     <div class="task-main"><button class="tick ${isDone ? 'on' : ''}" data-act="task-toggle" data-id="${t.id}" aria-pressed="${isDone}" aria-label="${isDone ? 'Повернути в роботу' : 'Позначити виконаним'}">✓</button>
-      <div class="task-body"><div class="ttl">${esc(t.title)}</div><div class="row small" style="margin-top:4px;gap:6px">${deadlineLabel(t)} ${prioPill(t.priority)}${t.status === 'in_progress' ? ' <span class="pill accent">У роботі</span>' : ''}</div></div>
+      <div class="task-body"><div class="ttl">${esc(t.title)}</div><div class="row small" style="margin-top:4px;gap:6px">${deadlineLabel(t)} ${prioPill(t.priority)}${t.prep ? ' <span class="pill info">підготовка</span>' : ''}${t.status === 'in_progress' ? ' <span class="pill accent">У роботі</span>' : ''}</div></div>
       <div class="task-acts"><select class="input hide-m" style="width:auto" data-act="task-status" data-id="${t.id}" aria-label="Статус завдання">${Object.entries(Schema.TASK_STATUSES).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <button class="btn sm" data-act="edit-task" data-id="${t.id}">Змінити</button><button class="btn sm danger hide-m" data-act="del-task" data-id="${t.id}" aria-label="Видалити">✕</button></div></div>
     ${t.description ? `<div class="small pre muted task-desc">${esc(t.description)}</div>` : ''}

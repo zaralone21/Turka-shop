@@ -1,7 +1,9 @@
 import { Calc } from '../core/calc.js';
 import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
+import { freeExpensesForPurchase, purchaseAmount, purchaseLink } from '../core/opening.js';
 import { planRegroup, sectionsToText, textToSections } from '../core/sections.js';
+import { once, syncExpensePlanned } from './budgetSync.js';
 import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core/reminders.js';
 import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, splitList, todayISO, uid, uniq } from '../core/utils.js';
 import { ACTIONS } from './events.js';
@@ -234,6 +236,7 @@ export function taskForm(id) {
       ${F.date('deadline', 'Дедлайн', v.deadline)}
       ${F.select('priority', 'Пріоритет', v.priority, Object.entries(Schema.PRIORITIES))}
       ${F.select('status', 'Статус', v.status, Object.entries(Schema.TASK_STATUSES), { full: true })}
+      <label class="field full check-field"><span><input type="checkbox" name="prep" ${v.prep ? 'checked' : ''}> Завдання підготовки до відкриття</span><span class="hint">За такими завданнями рахується прогрес підготовки на головній.</span></label>
       ${F.area('description', 'Опис', v.description, { rows: 2 })}
       <div class="field full"><span class="lbl">Чекліст</span><div class="cl-edit" id="cl-edit">${v.checklist.map(clRow).join('')}</div><div><button type="button" class="btn sm" id="cl-add">+ Додати пункт</button></div></div>`,
     onMount: m => {
@@ -244,7 +247,7 @@ export function taskForm(id) {
     },
     read: (fd, form) => { const errors = {}; if (!g(fd, 'title')) errors.title = 'Опишіть завдання.';
       const checklist = [...form.querySelectorAll('[data-cl]')].map(r => ({ id: r.dataset.cl, text: r.querySelector('[data-cl-text]').value.trim(), done: r.querySelector('[data-cl-done]').checked })).filter(i => i.text);
-      return { errors, values: { title: g(fd, 'title'), deadline: dateField(fd, 'deadline', errors), priority: g(fd, 'priority'), status: g(fd, 'status'), description: g(fd, 'description'), checklist } }; },
+      return { errors, values: { title: g(fd, 'title'), deadline: dateField(fd, 'deadline', errors), priority: g(fd, 'priority'), status: g(fd, 'status'), prep: fd.get('prep') === 'on', description: g(fd, 'description'), checklist } }; },
     onDelete: t ? () => ACTIONS['del-task']({ dataset: { id: t.id } }) : null,
     save: async vals => { if (t) { await Repo.update('tasks', t.id, vals); toast('Завдання збережено'); } else { await Repo.create('tasks', vals); toast('Завдання додано'); } },
   });
@@ -340,17 +343,53 @@ export function purchaseForm(id, preset = {}) {
       return { errors, values };
     },
     onDelete: p ? async () => { if (await confirmDialog({ title: 'Видалити закупівлю?', text: `<p style="margin:0">«${esc(p.title)}» буде видалено.${p.expenseId ? ' Пов’язана стаття бюджету залишиться.' : ''}</p>` })) { await Repo.remove('purchases', p.id); toast('Закупівлю видалено'); } } : null,
-    save: async vals => { if (p) { await Repo.update('purchases', p.id, vals); toast('Закупівлю збережено'); } else { await Repo.create('purchases', vals); toast('Закупівлю додано'); } },
+    save: async vals => { if (p) { await Repo.update('purchases', p.id, vals); toast('Закупівлю збережено'); await afterPurchaseEdit(p, Repo.get('purchases', p.id)); } else { await Repo.create('purchases', vals); toast('Закупівлю додано'); } },
   });
 }
-/** Створює одну статтю бюджету для закупівлі (категорія «Перша закупівля») і пов’язує їх. */
-export async function purchaseToBudget(id) {
-  const p = Repo.get('purchases', id); if (!p || p.expenseId) return;
+/** Після редагування закупівлі: при скасуванні — запропонувати переглянути статтю, при зміні суми — оновити план (було → стане). */
+async function afterPurchaseEdit(before, after) {
+  if (!after) return;
+  const st = purchaseLink(D(), after);
+  if (after.status === 'cancelled' && before.status !== 'cancelled' && st.expense) {
+    const e = st.expense;
+    const ok = await confirmDialog({ title: 'Закупівлю скасовано', ok: 'Відкрити статтю', danger: false,
+      text: `<p style="margin:0">У бюджеті залишається пов’язана стаття «${esc(e.name)}»: план ${fmtMoney(e.planned ?? 0)}, сплачено ${fmtMoney(e.paid ?? 0)}. Перегляньте її: можливо, план треба прибрати, а сплачене — повернути чи перенести.</p>` });
+    if (ok) expenseForm(e.id);
+    return;
+  }
+  if (after.status !== 'cancelled' && st.state === 'mismatch') await syncExpensePlanned(st.expense.id, st.amount, `Сума закупівлі «${after.title}» змінилась.`);
+}
+/** Створює одну статтю бюджету для закупівлі (категорія «Перша закупівля») і пов’язує їх. Якщо стаття вже є — нічого не створює. */
+export const purchaseToBudget = once(async id => {
+  const p = Repo.get('purchases', id); if (!p) return;
+  const st = purchaseLink(D(), p);
+  if (st.state === 'ok' || st.state === 'mismatch') { toast('Закупівля вже пов’язана зі статтею бюджету'); return; }
   const t = Calc.purchaseTotal(p);
-  const ok = await confirmDialog({ title: 'Внести закупівлю в бюджет?', ok: 'Внести', danger: false, text: `<p style="margin:0">Буде створено статтю «Закупівля: ${esc(p.title)}» у категорії «Перша закупівля» з плановою сумою <b>${fmtMoney(t.total)}</b> і сплаченою 0 ₴. Оплату потім позначте в бюджеті.</p>${t.missing.length ? `<div class="callout warn">${t.missing.length} позицій без ціни або кількості не входять у суму.</div>` : ''}` });
+  // стаття, створена раніше з цієї закупівлі (наприклад, на іншому пристрої), використовується повторно
+  const prev = D().expenses.find(e => e.source && e.source.type === 'purchase' && e.source.id === p.id);
+  const ok = await confirmDialog({ title: st.state === 'missing' ? 'Статтю бюджету видалено' : 'Внести закупівлю в бюджет?', ok: prev ? 'Прив’язати' : 'Внести', danger: false,
+    text: prev ? `<p style="margin:0">У бюджеті вже є стаття «${esc(prev.name)}» (план ${fmtMoney(prev.planned ?? 0)}), створена з цієї закупівлі. Її буде прив’язано знову, нова не створюється.</p>`
+      : `<p style="margin:0">Буде створено статтю «Закупівля: ${esc(p.title)}» у категорії «Перша закупівля» з плановою сумою <b>${fmtMoney(t.total)}</b> і сплаченою 0 ₴. Оплату потім позначте в бюджеті.</p>${t.missing.length ? `<div class="callout warn">${t.missing.length} позицій без ціни або кількості не входять у суму.</div>` : ''}` });
   if (!ok) return;
-  const e = await Repo.create('expenses', { name: 'Закупівля: ' + p.title, categoryId: 'first_stock', planned: Math.round(t.total * 100) / 100, paid: 0, comment: 'Створено із закупівлі' });
-  await Repo.update('purchases', p.id, { expenseId: e.id }); toast('Статтю додано в бюджет');
+  const e = prev || await Repo.create('expenses', { name: 'Закупівля: ' + p.title, categoryId: 'first_stock', planned: purchaseAmount(p), paid: 0, comment: 'Створено із закупівлі', source: { type: 'purchase', id: p.id } });
+  await Repo.update('purchases', p.id, { expenseId: e.id }); toast(prev ? 'Статтю прив’язано' : 'Статтю додано в бюджет');
+  if (prev) { const s2 = purchaseLink(D(), Repo.get('purchases', p.id)); if (s2.state === 'mismatch') await syncExpensePlanned(prev.id, s2.amount, 'Сума закупівлі відрізняється від плану статті.'); }
+});
+/** Прив’язати закупівлю до наявної статті бюджету (наприклад, після видалення попередньої). */
+export function purchaseRelink(id) {
+  const p = Repo.get('purchases', id); if (!p) return;
+  const list = freeExpensesForPurchase(D(), p.id).sort((a, b) => (a.categoryId === 'first_stock' ? 0 : 1) - (b.categoryId === 'first_stock' ? 0 : 1));
+  if (!list.length) { toast('У бюджеті немає вільних статей. Створіть нову кнопкою «Внести в бюджет».'); return; }
+  openModal({ title: 'Прив’язати до статті бюджету', body: `<div class="modal-b"><p class="small muted" style="margin:0">Закупівля «${esc(p.title)}» на ${fmtMoney(purchaseAmount(p))}. Статті, вже пов’язані з іншими закупівлями, не показано.</p><div class="list">${list.map(e => `<div class="li"><button class="li-btn" data-pick-exp="${e.id}"><span class="nm">${esc(e.name)}</span><div class="small muted">план ${fmtMoney(e.planned ?? 0)} · сплачено ${fmtMoney(e.paid ?? 0)}</div></button></div>`).join('')}</div></div>`,
+    foot: '<div class="modal-f"><button class="btn" data-close>Скасувати</button></div>',
+    onMount: m => m.querySelectorAll('[data-pick-exp]').forEach(b => b.onclick = async () => {
+      closeModal(); await Repo.update('purchases', p.id, { expenseId: b.dataset.pickExp }); toast('Закупівлю прив’язано до статті');
+      const st = purchaseLink(D(), Repo.get('purchases', p.id)); if (st.state === 'mismatch') await syncExpensePlanned(st.expense.id, st.amount, 'Сума закупівлі відрізняється від плану статті.');
+    }) });
+}
+export function purchaseSync(id) {
+  const p = Repo.get('purchases', id); const st = p && purchaseLink(D(), p);
+  if (st && st.state === 'mismatch') syncExpensePlanned(st.expense.id, st.amount, `Сума закупівлі «${p.title}» відрізняється від плану статті.`);
 }
 
 /* --- нагадування --- */

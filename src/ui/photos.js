@@ -15,7 +15,7 @@ const cloudOn = () => !!(Cloud.user && Cloud.client);
 const storage = () => Cloud.client.storage.from(BUCKET);
 
 /** Зменшує фото до maxSide пікселів по довшій стороні й перетворює на JPEG. */
-async function shrink(file, maxSide, quality) {
+export async function shrink(file, maxSide, quality) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);

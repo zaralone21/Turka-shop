@@ -1,4 +1,5 @@
 import { Calc } from '../../core/calc.js';
+import { expenseOrigins, monthlySummary } from '../../core/opening.js';
 import { esc, fmtMoney, fmtNum } from '../../core/utils.js';
 import { D, VIEWS, emptyState } from '../shared.js';
 
@@ -14,7 +15,8 @@ VIEWS.budget = () => {
       const items = d.expenses.filter(e => e.categoryId === c.id); const s = b.byCat[c.id];
       return `<tr class="group"><td class="first" colspan="2">${esc(c.name)}${c.refundable ? ' <span class="pill info">повертається</span>' : ''}</td><td class="r" data-label="Заплановано">${fmtMoney(s.planned)}</td><td class="r" data-label="Сплачено">${fmtMoney(s.paid)}</td><td class="r" data-label="Сплатити">${fmtMoney(s.toPay)}</td><td></td></tr>` +
         items.map(e => { const over = (e.paid || 0) > (e.planned || 0);
-          return `<tr><td class="first" data-label="Назва">${esc(e.name)}${e.comment ? `<div class="small muted">${esc(e.comment)}</div>` : ''}</td><td data-label="Статус">${(e.paid || 0) >= (e.planned || 0) && (e.paid || 0) > 0 ? '<span class="pill ok">Сплачено</span>' : (e.paid || 0) > 0 ? '<span class="pill warn">Частково</span>' : '<span class="pill">Не сплачено</span>'}</td>
+          const from = expenseOrigins(d, e);
+          return `<tr><td class="first" data-label="Назва">${esc(e.name)}${e.comment ? `<div class="small muted">${esc(e.comment)}</div>` : ''}${from.map(x => `<div class="small"><button class="btn link" data-act="open-ref" data-col="${x.collection}" data-id="${x.id}">↗ ${esc(x.label)}</button></div>`).join('')}</td><td data-label="Статус">${(e.paid || 0) >= (e.planned || 0) && (e.paid || 0) > 0 ? '<span class="pill ok">Сплачено</span>' : (e.paid || 0) > 0 ? '<span class="pill warn">Частково</span>' : '<span class="pill">Не сплачено</span>'}</td>
           <td class="r" data-label="Заплановано">${fmtMoney(e.planned ?? 0)}</td><td class="r" data-label="Сплачено">${fmtMoney(e.paid ?? 0)}${over ? `<div class="small" style="color:var(--danger)">+${fmtMoney(e.paid - (e.planned || 0))} понад план</div>` : ''}</td><td class="r" data-label="Сплатити">${fmtMoney(Math.max((e.planned || 0) - (e.paid || 0), 0))}</td>
           <td class="acts"><button class="btn sm" data-act="edit-expense" data-id="${e.id}">Змінити</button> <button class="btn sm danger" data-act="del-expense" data-id="${e.id}" aria-label="Видалити">✕</button></td></tr>`; }).join('');
     }).join('');
@@ -39,8 +41,9 @@ VIEWS.budget = () => {
     <div class="tile accent"><span class="k">Потрібно на відкриття</span><span class="v">${fmtMoney(b.needed)}</span><span class="s">з них поворотний депозит ${fmtMoney(b.deposit.needed)}</span></div>
     ${freeTile}
   </section>
-  <div class="formula"><span><b>Потрібно на відкриття</b> = сплачено + залишилося сплатити за планом. Якщо за статтею сплатили більше, ніж планували, враховується фактична сума, а не обидві. Так жодна витрата не рахується двічі.</span>
+  ${(() => { const m = monthlySummary(d); return `<div class="callout info row" style="justify-content:space-between"><span>Щомісячні витрати після відкриття: <b>${fmtMoney(m.total)}</b> на місяць. Вони рахуються окремо й у бюджет відкриття не входять.</span><button class="btn sm" data-nav="monthly">Переглянути</button></div>`; })()}
+  <details class="explain"><summary>Як рахується бюджет</summary><div class="formula"><span><b>Потрібно на відкриття</b> = сплачено + залишилося сплатити за планом. Якщо за статтею сплатили більше, ніж планували, враховується фактична сума, а не обидві. Так жодна витрата не рахується двічі.</span>
     <span><b>Поворотний депозит</b> (${fmtMoney(b.deposit.needed)}) входить у потрібну суму, бо гроші треба мати на руках, але показаний окремо: його повернуть. Безповоротні витрати: ${fmtMoney(b.nonRefundable)}.</span>
-    ${b.overPlan > 0 ? `<span><b>Сплачено понад план:</b> ${fmtMoney(b.overPlan)}.</span>` : ''}</div>
+    ${b.overPlan > 0 ? `<span><b>Сплачено понад план:</b> ${fmtMoney(b.overPlan)}.</span>` : ''}</div></details>
   ${d.expenses.length ? table : emptyState('Додайте статті витрат: оренду, депозит, ремонт, меблі, першу закупівлю тощо.', 'add-expense', 'Додати першу витрату')}`;
 };

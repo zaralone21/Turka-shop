@@ -85,3 +85,31 @@ do $$ begin
   end;
 end $$;
 reset role;
+
+-- Файли приміщення: приватні, лише своя тека
+select 'Сховище файлів приміщення приватне: ' || (not public)::text as check from storage.buckets where id = 'premises-files';
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into storage.objects (bucket_id, name) values ('premises-files', '11111111-1111-1111-1111-111111111111/pr1/d.pdf');
+do $$ begin
+  begin
+    insert into storage.objects (bucket_id, name) values ('premises-files', '22222222-2222-2222-2222-222222222222/pr1/d.pdf');
+    raise exception 'FAIL: A записав файл приміщення в теку B';
+  exception when insufficient_privilege then raise notice 'OK: файли приміщення пишуться лише у свою теку';
+  end;
+end $$;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  if (select count(*) from storage.objects where bucket_id = 'premises-files') <> 0 then raise exception 'FAIL: B бачить файли приміщення A'; end if;
+  raise notice 'OK: B не бачить файли приміщення A';
+end $$;
+
+-- Нові колекції (приміщення, облаштування, щомісячні витрати) ізольовані так само, як інші записи
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into public.records (collection, id, data) values ('premises', 'pr1', '{"address":"вул. Тестова, 1"}'), ('fitout', 'f1', '{"name":"Стелаж"}'), ('monthly', 'm1', '{"name":"Комунальні"}');
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  if (select count(*) from public.records where collection in ('premises', 'fitout', 'monthly')) <> 0 then raise exception 'FAIL: B бачить приміщення/облаштування A'; end if;
+  raise notice 'OK: нові колекції ізольовані';
+end $$;
+reset role;

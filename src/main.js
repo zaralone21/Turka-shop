@@ -15,12 +15,18 @@ import './ui/views/breakeven.js';
 import './ui/views/data.js';
 import './ui/views/purchases.js';
 import './ui/views/reminders.js';
+import './ui/views/premises.js';
+import './ui/views/fitout.js';
+import './ui/views/monthly.js';
 import './ui/ai.js';
 import './ui/events.js';
+import { OPENING_ACTIONS } from './ui/opening.js';
+import { ACTIONS } from './ui/events.js';
 import { initNotifications } from './ui/notifications.js';
 import { AI } from './ui/ai.js';
 
 /* Запуск застосунку. */
+Object.assign(ACTIONS, OPENING_ACTIONS);
 Repo.onChange(render);
 document.documentElement.lang = 'uk';
 (async () => {
