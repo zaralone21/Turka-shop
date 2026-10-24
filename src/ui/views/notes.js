@@ -8,7 +8,7 @@ VIEWS.notes = () => {
   if (UI.f.noteTag && !tags.includes(UI.f.noteTag)) UI.f.noteTag = '';
   const list = d.notes.filter(n => (!UI.f.noteTag || n.tags.includes(UI.f.noteTag)) && (!q || [n.title, n.body, ...n.tags, supplierName(n.supplierId)].join(' ').toLowerCase().includes(q)))
     .sort((a, b) => (b.pinned - a.pinned) || (b.updatedAt > a.updatedAt ? 1 : -1));
-  const head = `<div class="page-head"><div><h1>Нотатки</h1><p>${d.notes.length} ${plural(d.notes.length, 'нотатка', 'нотатки', 'нотаток')}</p></div><button class="btn primary hide-m" data-act="add-note">+ Нова нотатка</button></div>`;
+  const head = `<div class="page-head"><div><p>${d.notes.length} ${plural(d.notes.length, 'нотатка', 'нотатки', 'нотаток')}</p></div><button class="btn primary hide-m" data-act="add-note">+ Нова нотатка</button></div>`;
   if (!d.notes.length) return head + emptyState('Записуйте ідеї, домовленості й корисні контакти. Важливі нотатки можна закріпити.', 'add-note', 'Створити першу нотатку');
   return head + `
   <div class="toolbar"><input class="input grow" id="f-noteQ" data-filter="noteQ" placeholder="Пошук у нотатках…" value="${esc(UI.f.noteQ)}" aria-label="Пошук нотаток"></div>

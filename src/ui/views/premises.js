@@ -31,7 +31,7 @@ function premisesDetail(pr) {
   const planLine = x => `<li>${esc(x.label)}: ${x.amount === null ? unk : `<b>${fmtMoney(x.amount)}</b>`} · ${x.action === 'same' ? '<span class="pill ok">у бюджеті</span>' : x.action === 'update' ? `<span class="pill warn">у бюджеті ${fmtMoney(x.from)}</span>` : x.action === 'create' ? '<span class="pill">не в бюджеті</span>' : ''}</li>`;
   const needBudget = plan.some(x => x.action === 'create' || x.action === 'update');
   return `
-  <div class="page-head"><div><h1>${esc(premisesTitle(pr))}</h1><div class="row" style="margin-top:6px">${premisesPill(pr.status)}${pr.name && pr.address ? `<span class="small muted">${esc(pr.address)}</span>` : ''}</div></div>
+  <div class="page-head"><div><h2 class="rec-title">${esc(premisesTitle(pr))}</h2><div class="row" style="margin-top:6px">${premisesPill(pr.status)}${pr.name && pr.address ? `<span class="small muted">${esc(pr.address)}</span>` : ''}</div></div>
     <div class="row"><button class="btn" data-act="edit-premises" data-id="${pr.id}">Редагувати</button></div></div>
   ${isLeaseConfirmed(pr) ? '' : `<div class="callout warn"><b>Договір ще не підписано.</b> Суми й умови тут — домовленості, а не підтверджені факти. Коли підпишете договір, змініть статус.</div>`}
   <div class="grid-2">
@@ -62,7 +62,7 @@ function premisesDetail(pr) {
 
 VIEWS.premises = () => {
   const d = D();
-  if (!d.premises.length) return `<div class="page-head"><div><h1>Приміщення</h1><p>Точка, яку готуєте до відкриття: адреса, умови оренди, терміни, файли.</p></div></div>`
+  if (!d.premises.length) return `<div class="page-head"><div><p>Точка, яку готуєте до відкриття: адреса, умови оренди, терміни, файли.</p></div></div>`
     + emptyState('Запишіть вибране приміщення. Невідомі поля можна лишити порожніми й дописати пізніше.', 'add-premises', 'Додати приміщення');
   const pr = (UI.premisesId && Repo.get('premises', UI.premisesId)) || mainPremises(d);
   const pick = d.premises.length > 1 ? `<div class="chips sec-chips" role="group" aria-label="Приміщення">${d.premises.map(p => `<button class="chip ${p.id === pr.id ? 'on' : ''}" data-act="pick-premises" data-id="${p.id}">${esc(premisesTitle(p))}</button>`).join('')}</div>` : '';

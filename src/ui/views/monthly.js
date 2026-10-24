@@ -7,7 +7,7 @@ import { D, VIEWS, emptyState } from '../shared.js';
 /* ---------- Щомісячні витрати: окремо від бюджету відкриття ---------- */
 VIEWS.monthly = () => {
   const d = D(); const s = monthlySummary(d); const b = Calc.budget(d);
-  const head = `<div class="page-head"><div><h1>Щомісячні витрати</h1><p>Постійні платежі після відкриття. До бюджету відкриття не входять.</p></div><div class="row"><button class="btn" data-act="monthly-to-be">У беззбитковість</button><button class="btn primary hide-m" data-act="add-monthly">+ Стаття</button></div></div>`;
+  const head = `<div class="page-head"><div><p>Постійні платежі після відкриття. До бюджету відкриття не входять.</p></div><div class="row"><button class="btn" data-act="monthly-to-be">У беззбитковість</button><button class="btn primary hide-m" data-act="add-monthly">+ Стаття</button></div></div>`;
   const rem = id => id && Repo.get('reminders', id);
   const rentRow = s.rent ? `<div class="li"><div class="t"><button class="li-btn" data-nav="premises"><span class="nm">${esc(s.rent.name)}</span><div class="small muted">${s.rent.payDay ? `${s.rent.payDay}-го числа · ` : ''}${s.rent.confirmed ? 'за договором' : 'договір ще не підписано'}</div></button></div><b class="num">${fmtMoney(s.rent.amount)}</b></div>` : '';
   const rows = s.items.map(m => { const r = rem(m.reminderId);

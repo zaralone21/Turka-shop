@@ -1,7 +1,7 @@
 import { FITOUT_STATUSES, fitoutCategories, fitoutLink, fitoutSummary } from '../../core/opening.js';
 import { Repo } from '../../core/repo.js';
 import { daysFromToday, esc, fmtDate, fmtMoney, fmtNum, isNum, plural } from '../../core/utils.js';
-import { D, UI, VIEWS, emptyState, ext, prioPill } from '../shared.js';
+import { D, UI, VIEWS, emptyState, ext, prioPill, moreMenu } from '../shared.js';
 
 /* ---------- Облаштування приміщення ---------- */
 const PILL = { undecided: 'warn', chosen: 'info', ordered: 'accent', received: 'ok', installed: 'ok' };
@@ -33,7 +33,7 @@ function card(d, it) {
 
 VIEWS.fitout = () => {
   const d = D(); const cats = fitoutCategories(d); const s = fitoutSummary(d);
-  const head = `<div class="page-head"><div><h1>Облаштування</h1><p>Що потрібно для приміщення: ремонт, світло, меблі, вивіска, обладнання.</p></div><div class="row"><button class="btn" data-act="fitout-cats">Категорії</button><button class="btn primary hide-m" data-act="add-fitout">+ Позиція</button></div></div>`;
+  const head = `<div class="page-head"><div><p>Що потрібно для приміщення: ремонт, світло, меблі, вивіска, обладнання.</p></div><div class="row">${moreMenu([['fitout-cats', 'Категорії облаштування']])}<button class="btn primary hide-m" data-act="add-fitout">+ Позиція</button></div></div>`;
   if (!d.fitout.length) return head + emptyState('Складіть список того, що потрібно купити чи зробити в приміщенні. Для кожної позиції можна вказати суму, термін і продавця.', 'add-fitout', 'Додати першу позицію')
     + `<p class="small muted">Стандартні категорії: ${cats.map(c => esc(c.name)).join(', ')}.</p>`;
   if (UI.f.fitCat && !cats.some(c => c.id === UI.f.fitCat)) UI.f.fitCat = '';

@@ -1,7 +1,7 @@
 import { Calc } from '../../core/calc.js';
 import { expenseOrigins, monthlySummary } from '../../core/opening.js';
 import { esc, fmtMoney, fmtNum } from '../../core/utils.js';
-import { D, VIEWS, emptyState } from '../shared.js';
+import { D, VIEWS, emptyState, moreMenu } from '../shared.js';
 
 /* ---------- 6. Бюджет ---------- */
 VIEWS.budget = () => {
@@ -30,7 +30,7 @@ VIEWS.budget = () => {
       <tr class="total"><td class="first" colspan="2">Разом</td><td class="r" data-label="Заплановано">${fmtMoney(b.planned)}</td><td class="r" data-label="Сплачено">${fmtMoney(b.paid)}</td><td class="r" data-label="Сплатити">${fmtMoney(b.toPay)}</td><td></td></tr></tbody></table></div>`;
   }
   return `
-  <div class="page-head"><div><h1>Бюджет відкриття</h1><p>Скільки грошей потрібно, щоб відкрити магазин, і скільки вже сплачено.</p></div><div class="row"><button class="btn sm" data-act="budget-cats">Категорії витрат</button><button class="btn primary hide-m" data-act="add-expense">+ Додати витрату</button></div></div>
+  <div class="page-head"><div><p>Скільки грошей потрібно, щоб відкрити магазин, і скільки вже сплачено.</p></div><div class="row">${moreMenu([['budget-cats', 'Категорії витрат']])}<button class="btn primary hide-m" data-act="add-expense">+ Додати витрату</button></div></div>
   <section class="panel"><form class="row" data-form="total-budget" style="align-items:flex-end">
     <label class="field" style="flex:1 1 220px"><span class="lbl">Загальний бюджет на відкриття, ₴</span><input class="input num" id="total-budget" name="total" inputmode="decimal" placeholder="Наприклад, 400000" value="${b.total === null ? '' : esc(fmtNum(b.total))}"><span class="hint">Сума, яку ви готові вкласти. Задаєте самостійно.</span></label>
     <button class="btn primary" type="submit">Зберегти бюджет</button></form></section>

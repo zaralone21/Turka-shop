@@ -5,17 +5,35 @@ import { daysFromToday, esc, fmtDate, plural } from '../core/utils.js';
 /* =====================================================================
    6. ІНТЕРФЕЙС
    ===================================================================== */
-/* Розділи: [id, назва, група меню]. */
+/* Усі сторінки застосунку: [id, назва]. Адреси #id лишаються робочими, зокрема старі. */
 export const PAGES = [
-  ['home', 'Головна', 'work'], ['planner', 'Планер', 'work'], ['reminders', 'Нагадування', 'work'], ['ai', 'AI-менеджер', 'work'],
-  ['premises', 'Приміщення', 'open'], ['fitout', 'Облаштування', 'open'],
-  ['suppliers', 'Постачальники', 'shop'], ['products', 'Товари та ціни', 'shop'], ['purchases', 'Закупівлі', 'shop'], ['notes', 'Нотатки', 'shop'],
-  ['budget', 'Бюджет відкриття', 'money'], ['monthly', 'Щомісячні витрати', 'money'], ['breakeven', 'Беззбитковість', 'money'],
-  ['data', 'Дані й акаунт', 'sys'],
+  ['home', 'Головна'], ['planner', 'Завдання'], ['reminders', 'Нагадування'], ['ai', 'AI-менеджер'],
+  ['opening', 'План відкриття'], ['premises', 'Приміщення'], ['fitout', 'Облаштування'],
+  ['suppliers', 'Постачальники'], ['products', 'Товари та ціни'], ['purchases', 'Закупівлі'], ['notes', 'Нотатки'],
+  ['budget', 'Бюджет відкриття'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість'],
+  ['data', 'Дані й акаунт'],
 ];
-export const NAV_GROUPS = { work: 'Робота', open: 'Відкриття точки', shop: 'Магазин', money: 'Гроші', sys: '' };
+/* Розділи з вкладками. Перша вкладка відкривається за замовчуванням. */
+export const SECTIONS = {
+  planner: { name: 'Планер', tabs: [['planner', 'Завдання'], ['reminders', 'Нагадування']] },
+  opening: { name: 'Відкриття', tabs: [['opening', 'План відкриття'], ['premises', 'Приміщення'], ['fitout', 'Облаштування']] },
+  finance: { name: 'Фінанси', tabs: [['budget', 'Бюджет відкриття'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість']] },
+};
+/* Основне меню: [id розділу або сторінки, назва, іконка]. */
+export const NAV = [
+  ['home', 'Головна', 'home'], ['planner', 'Планер', 'planner'], ['opening', 'Відкриття', 'premises'],
+  ['suppliers', 'Постачальники', 'suppliers'], ['products', 'Товари та ціни', 'products'], ['purchases', 'Закупівлі', 'purchases'], ['notes', 'Нотатки', 'notes'],
+  ['finance', 'Фінанси', 'budget'], ['ai', 'AI-менеджер', 'ai'],
+];
+/** До якого розділу з вкладками належить сторінка (або null). */
+export const sectionOf = page => Object.keys(SECTIONS).find(k => SECTIONS[k].tabs.some(t => t[0] === page)) || null;
+/** Адреса → сторінка: #finance відкриває останню вкладку фінансів, невідома адреса — null. */
+export function resolvePage(id) {
+  if (SECTIONS[id] && !PAGES.some(p => p[0] === id)) return UI.lastTab[id] || SECTIONS[id].tabs[0][0];
+  return PAGES.some(p => p[0] === id) ? id : null;
+}
 export const UI = {
-  page: 'home', supplierId: null, premisesId: null, regroupHidden: false, keepScroll: true, aiOpen: false, chatId: null,
+  page: 'home', lastTab: {}, supplierId: null, premisesId: null, regroupHidden: false, keepScroll: true, aiOpen: false, chatId: null,
   f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', supCat: '', fitCat: '', fitStatus: '', noteQ: '', noteTag: '', taskStatus: '', purStatus: '', remShowDone: false },
 };
 export const root = document.getElementById('root');
@@ -31,10 +49,14 @@ export function toast(msg, type, undo) {
   setTimeout(() => el.remove(), undo ? 8000 : type === 'error' ? 6000 : 2600);
 }
 export const pageTitle = id => (PAGES.find(p => p[0] === id) || PAGES[0])[1];
+/** Назва в заголовку сторінки: назва розділу для вкладок. */
+export const headTitle = id => { const s = sectionOf(id); return s ? SECTIONS[s].name : pageTitle(id); };
 export const supplierName = id => { const s = id && Repo.get('suppliers', id); return s ? s.name : ''; };
 export const catName = id => (D().settings.budgetCategories.find(c => c.id === id) || {}).name || 'Інше';
 export const statusPill = s => `<span class="pill ${({ interested: 'info', contact: 'warn', working: 'ok', rejected: '' })[s]}">${Schema.SUPPLIER_STATUSES[s]}</span>`;
 export const prioPill = p => `<span class="pill ${({ high: 'bad', medium: 'warn', low: '' })[p]}">${Schema.PRIORITIES[p]}</span>`;
+/** Меню «Ще» для рідкісних дій сторінки: items — [act, назва]. */
+export const moreMenu = items => `<details class="more-menu"><summary class="btn" aria-label="Інші дії">⋯ Ще</summary><div class="more-pop" role="menu">${items.map(([act, label]) => `<button class="btn ghost" role="menuitem" data-act="${act}">${label}</button>`).join('')}</div></details>`;
 export const emptyState = (text, action, label, mini) => `<div class="empty ${mini ? 'mini' : ''}"><p>${text}</p><button class="btn ${mini ? 'sm' : ''} primary" data-act="${action}">${label}</button></div>`;
 export function ext(url) { if (!url) return ''; const u = /^https?:\/\//i.test(url) ? url : 'https://' + url; return `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(url.replace(/^https?:\/\//i, ''))}</a>`; }
 export function igLink(v) { if (!v) return ''; if (/^https?:\/\//i.test(v)) return ext(v); const h = v.replace(/^@/, '').trim(); return `<a href="https://instagram.com/${encodeURIComponent(h)}" target="_blank" rel="noopener noreferrer">@${esc(h)}</a>`; }

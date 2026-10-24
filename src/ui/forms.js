@@ -227,8 +227,8 @@ export function noteForm(id, presetSupplier) {
 }
 
 /* --- завдання --- */
-export function taskForm(id) {
-  const t = id ? Repo.get('tasks', id) : null; const v = t || { priority: 'medium', status: 'planned', checklist: [] };
+export function taskForm(id, preset = {}) {
+  const t = id ? Repo.get('tasks', id) : null; const v = t || { priority: 'medium', status: 'planned', checklist: [], ...preset };
   const clRow = i => `<div class="r" data-cl="${esc(i.id)}"><input type="checkbox" aria-label="Виконано" ${i.done ? 'checked' : ''} data-cl-done><input class="input" value="${esc(i.text)}" placeholder="Пункт чекліста" data-cl-text aria-label="Пункт чекліста"><button type="button" class="btn sm ghost" data-cl-del aria-label="Видалити пункт">✕</button></div>`;
   formModal({
     title: t ? 'Редагувати завдання' : 'Нове завдання',

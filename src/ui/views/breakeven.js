@@ -25,7 +25,7 @@ VIEWS.breakeven = () => {
   else if (r.general) result = `<div class="callout bad">${r.general}</div>`;
   else result = `<div class="callout info">Заповніть усі поля ліворуч${touched ? ' і виправте позначені помилки' : ''}, і тут з’явиться результат.</div>`;
   return `
-  <div class="page-head"><div><h1>Калькулятор беззбитковості</h1><p>Скільки треба продавати, щоб покрити щомісячні витрати.</p></div></div>
+  <div class="page-head"><div><p>Скільки треба продавати, щоб покрити щомісячні витрати.</p></div></div>
   <div class="grid-2">
     <section class="panel" style="display:flex;flex-direction:column;gap:14px">
       ${fld('fixed', 'Постійні витрати на місяць, ₴', `Те, що платите щомісяця незалежно від продажів: оренда, зарплата, комунальні, зв’язок, бухгалтер, фіксований податок ФОП. Закупівлю товару сюди не додавайте: її вже враховує маржа.${ms.total > 0 ? ` <button type="button" class="btn sm ghost" style="padding:0 4px" data-act="monthly-to-be">Підставити щомісячні витрати: ${fmtMoney(ms.total)}</button>` : ' <button type="button" class="btn link" data-nav="monthly">Заповнити щомісячні витрати</button>'}`, '35000')}

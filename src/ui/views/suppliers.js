@@ -18,7 +18,7 @@ VIEWS.suppliers = () => {
   const list = UI.f.supCat === NO_SECTION ? base.filter(s => !s.categories.length) : UI.f.supCat ? base.filter(s => s.categories.includes(UI.f.supCat)) : base;
   const chip = (v, label, n) => `<button class="chip ${UI.f.supCat === v ? 'on' : ''}" data-act="sup-cat" data-v="${esc(v)}">${esc(label)} <span class="muted">${n}</span></button>`;
   const noCat = base.filter(s => !s.categories.length).length;
-  const head = `<div class="page-head"><div><h1>Постачальники</h1><p>${d.suppliers.length} ${plural(d.suppliers.length, 'постачальник', 'постачальники', 'постачальників')}</p></div><button class="btn primary hide-m" data-act="add-supplier">+ Додати постачальника</button></div>`;
+  const head = `<div class="page-head"><div><p>${d.suppliers.length} ${plural(d.suppliers.length, 'постачальник', 'постачальники', 'постачальників')}</p></div><button class="btn primary hide-m" data-act="add-supplier">+ Додати постачальника</button></div>`;
   if (!d.suppliers.length) return head + emptyState('Тут будуть картки постачальників з контактами, умовами та цінами на товари.', 'add-supplier', 'Додати першого постачальника');
   return head + `
   <div class="toolbar">
@@ -45,7 +45,7 @@ export function supplierDetail(s) {
   const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
   return `
   <div><button class="btn ghost sm" data-act="back-suppliers">← Усі постачальники</button></div>
-  <div class="page-head"><div><h1>${esc(s.name)}</h1><div class="row" style="margin-top:6px">${statusPill(s.status)}${s.categories.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
+  <div class="page-head"><div><h2 class="rec-title">${esc(s.name)}</h2><div class="row" style="margin-top:6px">${statusPill(s.status)}${s.categories.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
     <div class="row"><button class="btn sm" data-act="edit-supplier" data-id="${s.id}">Редагувати</button><button class="btn sm" data-act="supplier-checked" data-id="${s.id}">Перевірено сьогодні</button><button class="btn sm danger hide-m" data-act="del-supplier" data-id="${s.id}">Видалити</button></div></div>
   <div class="grid-2">
     <section class="panel"><h2 style="margin-bottom:10px">Контакти</h2><dl class="kv">

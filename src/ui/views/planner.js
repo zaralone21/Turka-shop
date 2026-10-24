@@ -7,7 +7,7 @@ VIEWS.planner = () => {
   const d = D(); const showDone = d.settings.ui.showDoneTasks;
   const done = d.tasks.filter(t => t.status === 'done').length;
   const list = d.tasks.filter(t => (showDone || t.status !== 'done') && (!UI.f.taskStatus || t.status === UI.f.taskStatus)).sort(taskSort);
-  const head = `<div class="page-head"><div><h1>Планер</h1><p>${d.tasks.length - done} невиконаних · ${done} виконано</p></div><button class="btn primary hide-m" data-act="add-task">+ Нове завдання</button></div>`;
+  const head = `<div class="page-head"><div><p>${d.tasks.length - done} невиконаних · ${done} виконано</p></div><button class="btn primary hide-m" data-act="add-task">+ Нове завдання</button></div>`;
   if (!d.tasks.length) return head + emptyState('Розбийте підготовку до відкриття на завдання з дедлайнами та чеклістами.', 'add-task', 'Додати перше завдання');
   return head + `
   <div class="toolbar">
