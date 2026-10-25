@@ -3,6 +3,7 @@ import { purchaseLink } from '../../core/opening.js';
 import { Schema } from '../../core/schema.js';
 import { byText, daysFromToday, esc, fmtDate, fmtMoney } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, supplierName } from '../shared.js';
+import { svg } from '../shell.js';
 
 /* ---------- Закупівлі: що заплановано й що очікується ---------- */
 const STATUS_PILL = { planned: '', ordered: 'accent', awaiting: 'accent', received: 'ok', cancelled: '' };
@@ -21,7 +22,7 @@ VIEWS.purchases = () => {
     <div class="tile accent"><span class="k">Замовлено й очікується · ${sum.count.awaiting}</span><span class="v">${fmtMoney(sum.awaiting)}</span></div>
     <div class="tile"><span class="k">Отримано · ${sum.count.received}</span><span class="v">${fmtMoney(sum.received)}</span></div>
   </section>
-  <div class="toolbar"><select class="input" id="f-purStatus" data-filter="purStatus" aria-label="Статус"><option value="">Усі статуси</option>${Object.entries(Schema.PURCHASE_STATUSES).map(([k, v]) => `<option value="${k}" ${UI.f.purStatus === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+  <div class="chips sec-chips" role="group" aria-label="Статус">${[['', 'Усі'], ...Object.entries(Schema.PURCHASE_STATUSES)].map(([k, v]) => { const n = k ? d.purchases.filter(p => p.status === k).length : d.purchases.length; return n || !k ? `<button class="chip ${UI.f.purStatus === k ? 'on' : ''}" data-act="pur-status" data-v="${k}" aria-pressed="${UI.f.purStatus === k}">${v} <span class="muted">${n}</span></button>` : ''; }).join('')}</div>
   ${list.length ? `<div class="grid-cards">${list.map(purchaseCard).join('')}</div>` : '<p class="muted">Немає закупівель з таким статусом.</p>'}
   <details class="explain"><summary>Як рахується і як пов’язано з бюджетом</summary><div class="formula"><span><b>Сума закупівлі</b> = Σ (кількість × ціна одиниці) + доставка.</span><span>Закупівлі не додаються до бюджету самі, щоб не порахувати гроші двічі. Кнопка «Внести в бюджет» створює одну статтю витрат і пов’язує її із закупівлею. Якщо потім сума закупівлі зміниться, з’явиться позначка розбіжності й пропозиція оновити план статті. Сплачене змінюєте лише ви, у бюджеті.</span></div></details>`;
 };
@@ -36,11 +37,13 @@ export function purchaseBudgetLine(p) {
 }
 function purchaseCard(p) {
   const t = Calc.purchaseTotal(p); const late = p.expectedDate && ['ordered', 'awaiting'].includes(p.status) && daysFromToday(p.expectedDate) < 0;
-  return `<article class="card click" data-act="edit-purchase" data-id="${p.id}" tabindex="0" role="button" aria-label="Відкрити закупівлю ${esc(p.title)}">
-    <div class="card-top"><h3>${esc(p.title)}</h3>${purchasePill(p.status)}</div>
-    <div class="small muted">${[supplierName(p.supplierId) || 'Постачальник не вказаний', `${p.items.length} ${p.items.length === 1 ? 'позиція' : 'позицій'}`].map(esc).join(' · ')}</div>
+  const qty = p.items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  return `<article class="card click pur-card" data-act="edit-purchase" data-id="${p.id}" tabindex="0" role="button" aria-label="Відкрити закупівлю ${esc(p.title)}">
+    <div class="sup-top"><span class="lead" aria-hidden="true">${svg('box')}</span>
+      <div class="mn"><h3>${esc(p.title)}</h3><div class="small muted">${esc(supplierName(p.supplierId) || 'Постачальник не вказаний')}</div>
+        <div class="small ${late ? '' : 'muted'}">${p.expectedDate ? (late ? `<span class="pill bad">Запізнюється · ${fmtDate(p.expectedDate)}</span>` : 'Очікується ' + fmtDate(p.expectedDate)) : 'Дата не вказана'}</div></div>
+      <div class="trail">${purchasePill(p.status)}<b class="num">${fmtMoney(t.total)}</b><span class="small muted">${p.items.length} ${p.items.length === 1 ? 'позиція' : 'позицій'}${qty ? ` · ${qty} шт` : ''}</span></div></div>
     ${t.missing.length ? `<div class="small" style="color:var(--warn)">${t.missing.length} без ціни або кількості, у суму не входять</div>` : ''}
-    <div class="card-foot"><b class="num">${fmtMoney(t.total)}</b><span class="small ${late ? '' : 'muted'}">${p.expectedDate ? (late ? `<span class="pill bad">Запізнюється · ${fmtDate(p.expectedDate)}</span>` : 'Очікується ' + fmtDate(p.expectedDate)) : 'Дата не вказана'}</span></div>
     ${purchaseBudgetLine(p)}
   </article>`;
 }

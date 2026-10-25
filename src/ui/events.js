@@ -13,6 +13,7 @@ import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
 import { D, NAV, UI, resolvePage, sectionOf, toast } from './shared.js';
 import { FAB_ACTION, MORE_PAGES, render, svg } from './shell.js';
+import { setThemeMode, themeMode } from './theme.js';
 
 /* =====================================================================
    8. ОБРОБКА ПОДІЙ (делегування)
@@ -42,6 +43,8 @@ export const ACTIONS = {
   'prod-cat': el => { UI.f.prodCat = el.dataset.v; UI.f.prodSub = ''; render(); },
   'prod-sub': el => { UI.f.prodSub = el.dataset.v; render(); },
   'sup-cat': el => { UI.f.supCat = el.dataset.v; render(); },
+  'task-prio': el => { UI.f.taskPrio = el.dataset.v; render(); },
+  'pur-status': el => { UI.f.purStatus = el.dataset.v; render(); },
   'edit-sections': () => sectionsForm(),
   'regroup': () => regroupDialog(),
   'regroup-hide': () => { UI.regroupHidden = true; render(); },
@@ -72,7 +75,7 @@ export const ACTIONS = {
   'reset-all': async () => { if (await confirmDialog({ title: 'Видалити всі дані?', ok: 'Видалити все', text: `<p style="margin:0">Усі ${Repo.status.demo ? 'демо-' : ''}записи в цьому браузері буде видалено назавжди.</p><div class="callout warn">Якщо дані потрібні, спершу зробіть експорт у JSON.</div>` })) { await Repo.reset(); toast('Дані видалено'); } },
 };
 export function sheet(title, items) {
-  openModal({ title, narrow: true, body: `<div class="modal-b"><div class="sheet-list">${items.map(([key, icon, label], i) => `<button class="btn" data-sheet="${i}">${svg(icon)}${label}</button>`).join('')}</div></div>`,
+  openModal({ title, narrow: true, body: `<div class="modal-b"><div class="sheet-card"><div class="sheet-list">${items.map(([key, icon, label], i) => `<button class="btn" data-sheet="${i}">${svg(icon)}${label}</button>`).join('')}</div></div></div>`,
     onMount: m => m.querySelectorAll('[data-sheet]').forEach(b => b.onclick = () => { closeModal(); items[+b.dataset.sheet][3](); }) });
 }
 /** Незбережений текст у полях сторінки (позначені data-unsaved): перед переходом перепитуємо. */
@@ -81,9 +84,21 @@ export async function guardedGo(page) {
   if (dirty && !(await confirmDialog({ title: 'Перейти без збереження?', ok: 'Перейти', danger: false, text: '<p style="margin:0">У полі на цій сторінці є незбережений текст. Після переходу він зникне.</p>' }))) return;
   go(page);
 }
-export function moreSheet() { sheet('Ще', MORE_PAGES.map(id => { const n = NAV.find(x => x[0] === id) || [id, id === 'data' ? 'Дані й акаунт' : id, id]; return [id, n[2], n[1], () => guardedGo(id)]; })); }
+/** «Ще» на телефоні: решта розділів і вибір теми, у вигляді bottom sheet. */
+export function moreSheet() {
+  const items = MORE_PAGES.map(id => NAV.find(x => x[0] === id) || [id, id === 'data' ? 'Дані й акаунт' : id, id]);
+  const modes = [['light', 'sun', 'Світла'], ['dark', 'moon', 'Темна'], ['system', 'monitor', 'Як у системі']]; const m = themeMode();
+  openModal({ title: 'Ще', narrow: true, body: `<div class="modal-b"><div class="sheet-card"><div class="sheet-list">${items.map(([id, label, icon]) => `<button class="btn" data-go="${id}">${svg(icon)}${label}${svg('chev', 'class="chev"')}</button>`).join('')}</div></div>
+    <div class="theme-seg" role="group" aria-label="Тема">${modes.map(([k, icon, label]) => `<button type="button" data-theme-mode="${k}" aria-pressed="${m === k}">${svg(icon)}${label}</button>`).join('')}</div></div>`,
+    onMount: el => {
+      el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { closeModal(); guardedGo(b.dataset.go); });
+      el.querySelectorAll('[data-theme-mode]').forEach(b => b.onclick = () => setThemeMode(b.dataset.themeMode));
+    } });
+}
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
 Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
+/* Розгорнутий чекліст лишається розгорнутим після перемальовування сторінки. */
+document.addEventListener('toggle', e => { const el = e.target; if (el.matches && el.matches('details[data-cl]')) UI.openCl[el.open ? 'add' : 'delete'](el.dataset.cl); }, true);
 document.addEventListener('click', e => {
   const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else guardedGo(tab.dataset.tab); return; }
   const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { guardedGo(nav.dataset.nav); return; }

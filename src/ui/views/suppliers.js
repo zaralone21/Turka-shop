@@ -3,6 +3,7 @@ import { Schema } from '../../core/schema.js';
 import { NO_SECTION } from '../../core/sections.js';
 import { byText, daysFromToday, esc, fmtDate, fmtKyiv, fmtMoney, plural } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, ext, igLink, statusPill } from '../shared.js';
+import { svg } from '../shell.js';
 import { productTable } from './products.js';
 import { purchasePill } from './purchases.js';
 import { Calc } from '../../core/calc.js';
@@ -22,7 +23,7 @@ VIEWS.suppliers = () => {
   if (!d.suppliers.length) return head + emptyState('Тут будуть картки постачальників з контактами, умовами та цінами на товари.', 'add-supplier', 'Додати першого постачальника');
   return head + `
   <div class="toolbar">
-    <input class="input grow" id="f-supQ" data-filter="supQ" placeholder="Пошук: назва, місто, категорія…" value="${esc(UI.f.supQ)}" aria-label="Пошук постачальників">
+    <label class="search">${svg('search')}<input class="input" id="f-supQ" data-filter="supQ" placeholder="Пошук: назва, місто, категорія…" value="${esc(UI.f.supQ)}" aria-label="Пошук постачальників"></label>
     <select class="input" id="f-supStatus" data-filter="supStatus" aria-label="Статус"><option value="">Усі статуси</option>${Object.entries(Schema.SUPPLIER_STATUSES).map(([k, v]) => `<option value="${k}" ${UI.f.supStatus === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
   </div>
   <div class="chips sec-chips" role="group" aria-label="Розділи">${chip('', 'Усі', base.length)}${secs.map(c => chip(c, c, base.filter(s => s.categories.includes(c)).length)).join('')}${noCat ? chip(NO_SECTION, 'Без розділу', noCat) : ''}</div>
@@ -31,12 +32,14 @@ VIEWS.suppliers = () => {
 export function supplierCard(s) {
   const n = D().products.filter(p => p.supplierId === s.id).length;
   const age = s.checkedAt ? -daysFromToday(s.checkedAt) : null;
-  return `<article class="card click" data-act="open-supplier" data-id="${s.id}" tabindex="0" role="button" aria-label="Відкрити ${esc(s.name)}">
-    <div class="card-top"><h3>${esc(s.name)}</h3>${statusPill(s.status)}</div>
-    ${s.categories.length ? `<div class="chips">${s.categories.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
-    <div class="small muted">${[s.city, s.contactPerson, s.phone].filter(Boolean).map(esc).join(' · ') || 'Контакти не вказані'}</div>
+  const cats = s.categories.slice(0, 2);
+  return `<article class="card click sup-card" data-act="open-supplier" data-id="${s.id}" tabindex="0" role="button" aria-label="Відкрити ${esc(s.name)}">
+    <div class="sup-top"><span class="lead" aria-hidden="true">${esc((s.name.trim()[0] || '?').toUpperCase())}</span>
+      <div class="mn"><div class="card-top"><h3>${esc(s.name)}</h3>${statusPill(s.status)}</div>
+      ${cats.length ? `<div class="chips">${cats.map(c => `<span class="chip">${esc(c)}</span>`).join('')}${s.categories.length > 2 ? `<span class="chip">+${s.categories.length - 2}</span>` : ''}</div>` : ''}</div></div>
+    <div class="small muted">${[s.city, s.phone].filter(Boolean).map(esc).join(' · ') || 'Контакти не вказані'}</div>
     ${s.minOrder ? `<div class="small">Мін. замовлення: ${esc(s.minOrder)}</div>` : ''}
-    <div class="card-foot"><span class="small muted">${n} ${plural(n, 'товар', 'товари', 'товарів')}</span><span class="small ${age !== null && age > 90 ? '' : 'muted'}">${s.checkedAt ? `Перевірено ${fmtDate(s.checkedAt)}${age > 90 ? ' <span class="pill warn">давно</span>' : ''}` : '<span class="pill warn">Не перевірено</span>'}</span></div>
+    <div class="card-foot"><span class="small muted">${n} ${plural(n, 'товар', 'товари', 'товарів')}</span><span class="small muted">${s.checkedAt ? `Перевірено ${fmtDate(s.checkedAt)}${age > 90 ? ' <span class="pill warn">давно</span>' : ''}` : '<span class="pill warn">Не перевірено</span>'}</span></div>
   </article>`;
 }
 export function supplierDetail(s) {

@@ -8,6 +8,7 @@ import { hydrateFiles } from './files.js';
 import { hydratePhotos } from './photos.js';
 import { BRAND, cottonLogo } from './brand.js';
 import { currentTheme, themeLabel } from './theme.js';
+import { countUp } from './motion.js';
 import { D, NAV, SECTIONS, UI, VIEWS, headTitle, isOverdue, root, sectionOf } from './shared.js';
 
 /* ---------- каркас ---------- */
@@ -38,8 +39,16 @@ export const ICON = {
   shop: '<path d="M4 9h16l-1.2-4.2A1 1 0 0 0 17.8 4H6.2a1 1 0 0 0-1 .8z"/><path d="M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M5.5 12v8h13v-8M10 20v-4.5h4V20"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  chev: '<path d="m9 18 6-6-6-6"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  dot: '<circle cx="12" cy="12" r="3"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  pie: '<path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
 };
-export const svg = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICON[name]}</svg>`;
+export const svg = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICON[name]}</svg>`;
 /** Перемикач теми: сонце в темній темі, місяць у світлій. Перемикається без перемальовування сторінки. */
 export const themeBtn = (withText = false) => `<button type="button" class="icon-btn theme-btn" data-act="theme-toggle" aria-label="${themeLabel()}" title="${themeLabel()}" aria-pressed="${currentTheme() === 'dark'}">${svg('moon', 'class="t-moon"')}${svg('sun', 'class="t-sun"')}${withText ? '<span class="hide-h">Тема</span>' : ''}</button>`;
 /** Сьогоднішня дата словами, за Києвом. */
@@ -83,6 +92,14 @@ function restoreEditing(k) {
   el.scrollTop = k.scroll;
 }
 
+let lastPage = null, lastDrawer = false, lastTab = 0;
+/** Нижнє меню з індикатором, що плавно переїжджає від попередньої вкладки до поточної. */
+function tabbarHtml(cur, alerts) {
+  const idx = Math.max(0, TABS.findIndex(([id]) => id === 'more' ? MORE_PAGES.includes(cur) : cur === id));
+  const from = lastTab; lastTab = idx;
+  return `<span class="tab-ind ${from !== idx ? 'move' : ''}" style="--from:${from};--to:${idx}" aria-hidden="true"></span>` + TABS.map(([id, label, icon], i) => { const on = i === idx;
+    return `<button data-tab="${id}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}>${svg(icon)}<span>${label}</span>${alerts[id] ? `<i class="badge">${alerts[id]}</i>` : ''}</button>`; }).join('');
+}
 export function render() {
   if (!Repo.data) return;
   const d = D(); const openTasks = d.tasks.filter(t => t.status !== 'done'); const overdue = openTasks.filter(isOverdue).length;
@@ -105,20 +122,24 @@ export function render() {
     </aside>
     <main class="main">
       <header class="header"><div class="header-in">
-        ${UI.page === 'home' ? `<div class="ttl hero-h hide-m"><span class="hero-date">${esc(longToday())}</span><h1>Ваш магазин починається тут</h1></div>` : '<div class="ttl hide-m"></div>'}
-        <div class="ttl only-m-flex"><span class="m-logo">${cottonLogo('logo-s')}</span>${BRAND.replace('home', '<i>home</i>')}</div>
+        <div class="ttl hide-m"></div>
+        ${UI.page === 'home' ? `<div class="ttl only-m-flex"><span class="m-logo">${cottonLogo('logo-s')}</span>${BRAND.replace('home', '<i>home</i>')}</div>` : `<div class="ttl only-m-flex m-ttl"><span>${esc(headTitle(UI.page))}</span></div>`}
         ${UI.page === 'ai' ? '' : `<button class="icon-btn" data-act="ai-open" aria-label="AI-менеджер">${svg('ai')}<span class="hide-h">AI</span></button>`}
-        ${themeBtn()}
+        <span class="hide-m">${themeBtn()}</span>
         <button class="icon-btn" data-act="notif-open" aria-label="Сповіщення${bell ? `: ${bell} нових` : ''}">${svg('bell')}${bell ? `<i class="badge">${bell}</i>` : ''}</button>
         <button class="icon-btn primary hide-m" data-act="quick-add" aria-label="Додати запис">${svg('plus')}<span>Додати</span></button>
       </div></header>
       <div class="wrap">${banners()}${pageHead()}${VIEWS[UI.page]()}</div>
     </main>
   </div>
-  <nav class="tabbar" aria-label="Розділи">${TABS.map(([id, label, icon]) => { const on = id === 'more' ? MORE_PAGES.includes(cur) : cur === id;
-    return `<button data-tab="${id}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}>${svg(icon)}<span>${label}</span>${alerts[id] ? `<i class="badge">${alerts[id]}</i>` : ''}</button>`; }).join('')}</nav>
+  <nav class="tabbar" aria-label="Розділи">${tabbarHtml(cur, alerts)}</nav>
   ${showFab && !(UI.page === 'suppliers' && UI.supplierId) ? `<button class="fab" data-act="fab" aria-label="Додати">${svg('plus')}</button>` : ''}
   ${UI.aiOpen && UI.page !== 'ai' ? AI.drawerHtml() : ''}`;
+  // Анімація появи лише при переході на іншу сторінку, а не при кожному оновленні даних.
+  const enter = UI.page !== lastPage; lastPage = UI.page;
+  const drawerIn = !!(UI.aiOpen && UI.page !== 'ai') && !lastDrawer; lastDrawer = !!(UI.aiOpen && UI.page !== 'ai');
+  root.classList.toggle('page-enter', enter); root.classList.toggle('drawer-enter', drawerIn);
+  if (enter) countUp(root.querySelector('.wrap'));
   if (UI.keepScroll) window.scrollTo(0, scroll); UI.keepScroll = true;
   AI.afterRender();
   restoreEditing(keep);

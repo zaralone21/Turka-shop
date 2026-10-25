@@ -3,6 +3,7 @@ import { NO_SECTION, SORTS, groupProducts, planRegroup, sectionOrder } from '../
 import { byText, daysFromToday, esc, fmtDate, fmtMoney, fmtNum, fmtPct, isNum, plural } from '../../core/utils.js';
 import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, emptyState, ext, supplierName, moreMenu } from '../shared.js';
+import { svg } from '../shell.js';
 
 /* ---------- 3. Товари ---------- */
 export const FORMULAS = `<details class="explain"><summary>Формули</summary><div class="formula">
@@ -12,11 +13,13 @@ export const FORMULAS = `<details class="explain"><summary>Формули</summa
 export function productMobile(list, showSupplier) {
   return `<div class="m-list only-m">${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);
-    const sub = [secLabel(p), showSupplier && (p.supplierId ? supplierName(p.supplierId) : 'без постачальника'), p.sku && 'арт. ' + p.sku].filter(Boolean).map(esc).join(' · ');
+    const sub = [p.sizes && 'Розміри: ' + p.sizes, showSupplier && (p.supplierId ? supplierName(p.supplierId) : 'без постачальника'), p.sku && 'арт. ' + p.sku].filter(Boolean).map(esc).join(' · ');
     const n = (p.photos || []).length;
-    return `<button class="m-item ${n ? 'has-photo' : ''}" data-act="edit-product" data-id="${p.id}">${n ? `<span class="m-photo">${photoImg(p.photos[0], 'thumb', p.name)}${n > 1 ? `<i>${n}</i>` : ''}</span>` : ''}<div class="m-row"><b>${esc(p.name)}</b><span class="num">${fmtMoney(p.retailPrice)}</span></div>${sub ? `<div class="m-sub">${sub}</div>` : ''}
-      <div class="m-metrics"><span>Закуп. од. <b>${fmtMoney(c)}</b></span><span>Націнка <b>${fmtPct(mk)}</b></span><span>Маржа <b style="${isNum(mg) && mg < 0 ? 'color:var(--danger)' : ''}">${fmtPct(mg)}</b></span></div>
-      <div class="m-sub">${p.priceType === 'pack' ? `${fmtMoney(p.purchasePrice)} за уп. ${fmtNum(p.packQty)} шт · ` : ''}ціна від ${fmtDate(p.priceDate)}</div></button>`;
+    return `<button class="m-item prod-item" data-act="edit-product" data-id="${p.id}"><span class="lead lg">${n ? photoImg(p.photos[0], '', p.name) : svg('products')}</span>
+      <span class="mn"><b class="nm">${esc(p.name)}</b>${sub ? `<span class="m-sub">${sub}</span>` : ''}
+      <span class="m-metrics"><span>Закуп <b>${fmtMoney(c)}</b></span><span>Роздріб <b>${fmtMoney(p.retailPrice)}</b></span></span>
+      <span class="m-sub">${p.priceType === 'pack' ? `${fmtMoney(p.purchasePrice)} за уп. ${fmtNum(p.packQty)} шт · ` : ''}ціна від ${fmtDate(p.priceDate)} · маржа <span style="${isNum(mg) && mg < 0 ? 'color:var(--danger)' : ''}">${fmtPct(mg)}</span></span></span>
+      <span class="trail"><span class="small muted">Націнка</span><b class="big" style="${isNum(mk) && mk < 0 ? 'color:var(--danger)' : ''}">${fmtPct(mk)}</b>${n > 1 ? `<span class="small muted">${n} фото</span>` : ''}</span></button>`;
   }).join('')}</div>`;
 }
 const secLabel = p => [p.category, p.subcategory].filter(Boolean).join(' › ');
@@ -61,7 +64,7 @@ VIEWS.products = () => {
   const one = groups.length === 1;
   return head + `
   <div class="toolbar">
-    <input class="input grow" id="f-prodQ" data-filter="prodQ" placeholder="Пошук: назва, артикул, коментар…" value="${esc(UI.f.prodQ)}" aria-label="Пошук товарів">
+    <label class="search">${svg('search')}<input class="input" id="f-prodQ" data-filter="prodQ" placeholder="Пошук: назва, артикул, коментар…" value="${esc(UI.f.prodQ)}" aria-label="Пошук товарів"></label>
     <select class="input" id="f-prodSup" data-filter="prodSup" aria-label="Постачальник"><option value="">Усі постачальники</option><option value="__none" ${UI.f.prodSup === '__none' ? 'selected' : ''}>Без постачальника</option>${[...d.suppliers].sort((a, b) => byText(a.name, b.name)).map(s => `<option value="${s.id}" ${UI.f.prodSup === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
     <select class="input" id="f-prodSort" data-filter="prodSort" aria-label="Сортування">${SORTS.map(([k, t]) => `<option value="${k}" ${UI.f.prodSort === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
   </div>
