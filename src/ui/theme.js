@@ -19,6 +19,13 @@ function apply(t, animate) {
   document.querySelectorAll('.theme-btn').forEach(b => { b.setAttribute('aria-label', themeLabel()); b.title = themeLabel(); b.setAttribute('aria-pressed', String(t === 'dark')); });
 }
 
+/** Вибір у меню «Ще»: світла, темна або як у системі. */
+export const themeMode = () => saved() || 'system';
+export function setThemeMode(mode) {
+  try { if (mode === 'system') localStorage.removeItem(KEY); else localStorage.setItem(KEY, mode); } catch {}
+  apply(mode === 'system' ? system() : mode, true);
+  document.querySelectorAll('[data-theme-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeMode === mode)));
+}
 export function toggleTheme() {
   const t = currentTheme() === 'dark' ? 'light' : 'dark';
   try { localStorage.setItem(KEY, t); } catch {}

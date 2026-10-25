@@ -30,6 +30,9 @@ import { initTheme, toggleTheme } from './ui/theme.js';
 /* Запуск застосунку. */
 Object.assign(ACTIONS, OPENING_ACTIONS, { 'theme-toggle': () => toggleTheme() });
 initTheme();
+/* Шапка й нижнє меню стають щільнішими, коли під ними прокручується вміст. */
+const onScroll = () => document.documentElement.classList.toggle('scrolled', window.scrollY > 4);
+window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 Repo.onChange(render);
 document.documentElement.lang = 'uk';
 (async () => {
