@@ -10,8 +10,10 @@ export const FORMULAS = `<details class="explain"><summary>Формули</summa
   <span><b>Ціна одиниці</b> = ціна упаковки ÷ кількість одиниць в упаковці</span>
   <span><b>Націнка</b> = (роздрібна ціна − ціна одиниці) ÷ ціна одиниці × 100%</span>
   <span><b>Маржа</b> = (роздрібна ціна − ціна одиниці) ÷ роздрібна ціна × 100%</span></div></details>`;
-export function productMobile(list, showSupplier) {
-  return `<div class="m-list only-m">${list.map(p => {
+/** Вигляд списку на комп'ютері: картки (типово) або таблиця. Налаштування лише цього пристрою. */
+export const prodView = () => { try { return localStorage.getItem('komfort-prod-view') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } };
+export function productMobile(list, showSupplier, cls = 'only-m') {
+  return `<div class="m-list ${cls}">${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);
     const sub = [p.sizes && 'Розміри: ' + p.sizes, showSupplier && (p.supplierId ? supplierName(p.supplierId) : 'без постачальника'), p.sku && 'арт. ' + p.sku].filter(Boolean).map(esc).join(' · ');
     const n = (p.photos || []).length;
@@ -26,6 +28,7 @@ const secLabel = p => [p.category, p.subcategory].filter(Boolean).join(' › ');
 const thumbBtn = p => { const n = (p.photos || []).length;
   return n ? `<button class="thumb-btn" data-act="product-photos" data-id="${p.id}" aria-label="Фото товару (${n})">${photoImg(p.photos[0], 'thumb', p.name)}${n > 1 ? `<i>${n}</i>` : ''}</button>` : ''; };
 export function productTable(list, showSupplier) {
+  if (prodView() === 'cards') return productMobile(list, showSupplier, 'prod-cards');
   return productMobile(list, showSupplier) + `<div class="table-wrap hide-m"><table class="t stack"><thead><tr><th>Товар</th><th>Розділ</th>${showSupplier ? '<th>Постачальник</th>' : ''}<th class="r">Закупівля</th><th class="r">Ціна од.</th><th class="r">Роздріб</th><th class="r">Націнка</th><th class="r">Маржа</th><th>Ціна від</th><th class="acts"><span class="sr">Дії</span></th></tr></thead><tbody>
   ${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);
@@ -56,7 +59,7 @@ VIEWS.products = () => {
   const subs = UI.f.prodCat && UI.f.prodCat !== NO_SECTION ? [...new Set([...(sections.find(s => s.name === UI.f.prodCat)?.subs || []), ...inCat.map(p => p.subcategory).filter(Boolean)])] : [];
   if (!subs.includes(UI.f.prodSub) && UI.f.prodSub !== NO_SECTION) UI.f.prodSub = '';
   const list = UI.f.prodSub === NO_SECTION ? inCat.filter(p => !p.subcategory) : UI.f.prodSub ? inCat.filter(p => p.subcategory === UI.f.prodSub) : inCat;
-  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row">${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
+  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row"><span class="view-seg hide-m" role="group" aria-label="Вигляд списку">${[['cards', 'Картки'], ['table', 'Таблиця']].map(([k, t]) => `<button type="button" data-act="prod-view" data-v="${k}" aria-pressed="${prodView() === k}">${t}</button>`).join('')}</span>${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
   if (!d.products.length) return head + emptyState('Додайте товар з ціною закупівлі та плановою роздрібною ціною, і націнка з маржею порахуються автоматично.', 'add-product', 'Додати перший товар') + FORMULAS;
   const plan = planRegroup(d), toMove = plan.products.length + plan.suppliers.length;
   const noCat = base.filter(p => !p.category).length;

@@ -78,3 +78,8 @@ export function deadlineLabel(t) {
 }
 
 export const VIEWS = {};
+
+/** Як звертатися в привітанні: налаштування лише цього пристрою, у базу не потрапляє. */
+const NAME_KEY = 'komfort-name';
+export function userName() { try { return (localStorage.getItem(NAME_KEY) || '').trim().slice(0, 40); } catch { return ''; } }
+export function setUserName(v) { try { v = String(v || '').trim().slice(0, 40); v ? localStorage.setItem(NAME_KEY, v) : localStorage.removeItem(NAME_KEY); } catch { /* приватний режим */ } }

@@ -23,7 +23,7 @@ VIEWS.purchases = () => {
     <div class="tile"><span class="k">Отримано · ${sum.count.received}</span><span class="v">${fmtMoney(sum.received)}</span></div>
   </section>
   <div class="chips sec-chips" role="group" aria-label="Статус">${[['', 'Усі'], ...Object.entries(Schema.PURCHASE_STATUSES)].map(([k, v]) => { const n = k ? d.purchases.filter(p => p.status === k).length : d.purchases.length; return n || !k ? `<button class="chip ${UI.f.purStatus === k ? 'on' : ''}" data-act="pur-status" data-v="${k}" aria-pressed="${UI.f.purStatus === k}">${v} <span class="muted">${n}</span></button>` : ''; }).join('')}</div>
-  ${list.length ? `<div class="grid-cards">${list.map(purchaseCard).join('')}</div>` : '<p class="muted">Немає закупівель з таким статусом.</p>'}
+  ${list.length ? `<div class="pur-list">${list.map(purchaseCard).join('')}</div>` : '<p class="muted">Немає закупівель з таким статусом.</p>'}
   <details class="explain"><summary>Як рахується і як пов’язано з бюджетом</summary><div class="formula"><span><b>Сума закупівлі</b> = Σ (кількість × ціна одиниці) + доставка.</span><span>Закупівлі не додаються до бюджету самі, щоб не порахувати гроші двічі. Кнопка «Внести в бюджет» створює одну статтю витрат і пов’язує її із закупівлею. Якщо потім сума закупівлі зміниться, з’явиться позначка розбіжності й пропозиція оновити план статті. Сплачене змінюєте лише ви, у бюджеті.</span></div></details>`;
 };
 /** Стан зв'язку з бюджетом: розбіжність суми, видалена стаття, скасована закупівля з активною статтею. */

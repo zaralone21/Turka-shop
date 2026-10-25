@@ -7,6 +7,25 @@ import { svg } from './shell.js';
    ===================================================================== */
 export let modalEl = null, lastFocus = null;
 export function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); } }
+const isSheet = () => matchMedia('(max-width: 900px)').matches;
+/** Телефон: свайп униз за шапку закриває вікно, якщо в ньому нічого не змінено. */
+function wireSheet(back) {
+  const m = back.querySelector('.modal'); let y0 = null, dy = 0;
+  back.addEventListener('input', () => { back.dataset.dirty = '1'; });
+  m.addEventListener('touchstart', e => { if (!isSheet() || e.target.closest('button, input, select, textarea') || e.touches[0].clientY - m.getBoundingClientRect().top > 60) return; y0 = e.touches[0].clientY; dy = 0; m.classList.add('dragging'); }, { passive: true });
+  m.addEventListener('touchmove', e => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); m.style.transform = `translateY(${back.dataset.dirty ? Math.min(dy, 40) * .5 : dy}px)`; }, { passive: true });
+  const end = () => { if (y0 === null) return; y0 = null; m.classList.remove('dragging');
+    if (dy > 90 && !back.dataset.dirty) { m.classList.add('closing'); back.classList.add('fading'); setTimeout(() => { if (modalEl === back) back.querySelector('[data-close]').click(); }, 240); return; }
+    m.style.transform = ''; if (dy > 90) { m.classList.remove('nudge'); void m.offsetWidth; m.classList.add('nudge'); } };
+  m.addEventListener('touchend', end); m.addEventListener('touchcancel', end);
+  // поле під курсором не ховається за клавіатурою
+  back.addEventListener('focusin', e => { if (isSheet() && e.target.matches('input, textarea, select')) setTimeout(() => e.target.isConnected && e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 260); });
+}
+/* Висота екранної клавіатури (iOS не зменшує вікно): піднімаємо вікно на неї. */
+if (window.visualViewport) {
+  const kb = () => { const v = visualViewport; const h = Math.max(0, Math.round(innerHeight - v.height - v.offsetTop)); document.documentElement.style.setProperty('--kb', (h > 80 ? h : 0) + 'px'); };
+  visualViewport.addEventListener('resize', kb); visualViewport.addEventListener('scroll', kb);
+}
 export function openModal({ title, body, foot, narrow, wide, onMount }) {
   closeModal(); lastFocus = document.activeElement;
   modalEl = document.createElement('div'); modalEl.className = 'modal-back';
@@ -14,6 +33,7 @@ export function openModal({ title, body, foot, narrow, wide, onMount }) {
   modalEl.addEventListener('mousedown', e => { if (e.target === modalEl) closeModal(); });
   modalEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModal(); });
   document.body.appendChild(modalEl);
+  wireSheet(modalEl);
   onMount && onMount(modalEl);
   const first = modalEl.querySelector('input:not([type=hidden]):not(.sr), textarea, select, .modal-f .btn'); first && first.focus();
 }
