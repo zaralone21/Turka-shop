@@ -8,12 +8,12 @@
       var t = null; try { t = localStorage.getItem('komfort-theme'); } catch (e) {}
       if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', t);
-      document.documentElement.style.background = t === 'dark' ? '#191619' : '#FAF7F2';
+      document.documentElement.style.background = t === 'dark' ? '#2A1F19' : '#F5EFE6';
     })();
   </script>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#F7F2ED" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#201B20" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F5EFE6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#2A1F19" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icon-192.png">
