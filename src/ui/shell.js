@@ -8,7 +8,6 @@ import { hydrateFiles } from './files.js';
 import { hydratePhotos } from './photos.js';
 import { BRAND, cottonLogo } from './brand.js';
 import { currentTheme, themeLabel } from './theme.js';
-import { countUp } from './motion.js';
 import { D, NAV, SECTIONS, UI, VIEWS, headTitle, isOverdue, root, sectionOf } from './shared.js';
 
 /* ---------- каркас ---------- */
@@ -84,7 +83,6 @@ function restoreEditing(k) {
   el.scrollTop = k.scroll;
 }
 
-let lastPage = null, lastDrawer = false;
 export function render() {
   if (!Repo.data) return;
   const d = D(); const openTasks = d.tasks.filter(t => t.status !== 'done'); const overdue = openTasks.filter(isOverdue).length;
@@ -121,11 +119,6 @@ export function render() {
     return `<button data-tab="${id}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}>${svg(icon)}<span>${label}</span>${alerts[id] ? `<i class="badge">${alerts[id]}</i>` : ''}</button>`; }).join('')}</nav>
   ${showFab && !(UI.page === 'suppliers' && UI.supplierId) ? `<button class="fab" data-act="fab" aria-label="Додати">${svg('plus')}</button>` : ''}
   ${UI.aiOpen && UI.page !== 'ai' ? AI.drawerHtml() : ''}`;
-  // Анімація появи лише при переході на іншу сторінку, а не при кожному оновленні даних.
-  const enter = UI.page !== lastPage; lastPage = UI.page;
-  const drawerIn = !!(UI.aiOpen && UI.page !== 'ai') && !lastDrawer; lastDrawer = !!(UI.aiOpen && UI.page !== 'ai');
-  root.classList.toggle('page-enter', enter); root.classList.toggle('drawer-enter', drawerIn);
-  if (enter) countUp(root.querySelector('.wrap'));
   if (UI.keepScroll) window.scrollTo(0, scroll); UI.keepScroll = true;
   AI.afterRender();
   restoreEditing(keep);
