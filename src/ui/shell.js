@@ -93,6 +93,28 @@ function restoreEditing(k) {
 }
 
 let lastPage = null, lastDrawer = false, lastTab = 0;
+const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; } };
+/* FLIP: після зміни даних рядки списків плавно переїжджають на нові місця замість стрибка. */
+function flipFirst() {
+  if (reduced()) return null;
+  const m = new Map(); root.querySelectorAll('[data-flip]').forEach(el => m.set(el.dataset.flip, el.getBoundingClientRect().top)); return m.size ? m : null;
+}
+function flipPlay(first) {
+  const moved = [];
+  root.querySelectorAll('[data-flip]').forEach(el => { const top = first.get(el.dataset.flip); if (top === undefined) return;
+    const dy = top - el.getBoundingClientRect().top; if (Math.abs(dy) > 1 && Math.abs(dy) < innerHeight) { el.style.transform = `translateY(${dy}px)`; moved.push(el); } });
+  if (!moved.length) return; void root.offsetHeight;
+  moved.forEach(el => { el.classList.add('flip-move'); el.style.transform = ''; el.addEventListener('transitionend', () => el.classList.remove('flip-move'), { once: true }); });
+}
+/** Дрібниці розкладки після кожного малювання: «Ще» поруч із заголовком, активна вкладка у видимій частині. */
+function afterLayout() {
+  const row = root.querySelector('.pt-row'); const head = root.querySelector('.wrap > .page-head');
+  const mm = head && head.querySelector('.more-menu');
+  if (row && mm) { row.appendChild(mm); mm.querySelector('summary').innerHTML = '⋯<span class="sr"> Інші дії</span>'; }
+  if (head) head.classList.toggle('m-empty', ![...head.querySelectorAll(':scope > :not(p) , :scope > div > *')].some(el => el.tagName !== 'P' && !el.classList.contains('hide-m') && !(el.classList.contains('row') && [...el.children].every(c => c.classList.contains('hide-m'))) && !(el.tagName === 'DIV' && [...el.children].every(c => c.tagName === 'P'))));
+  const on = root.querySelector('.tabs .tab.on');
+  if (on) { const t = on.parentElement; t.scrollLeft = on.offsetLeft - (t.clientWidth - on.offsetWidth) / 2; }
+}
 /** Нижнє меню з індикатором, що плавно переїжджає від попередньої вкладки до поточної. */
 function tabbarHtml(cur, alerts) {
   const idx = Math.max(0, TABS.findIndex(([id]) => id === 'more' ? MORE_PAGES.includes(cur) : cur === id));
@@ -113,6 +135,7 @@ export function render() {
   const scroll = window.scrollY;
   const keep = editingState();
   const showFab = FAB_ACTION[UI.page] || UI.page === 'home';
+  const flip = UI.page === lastPage ? flipFirst() : null;
   root.innerHTML = `
   <div class="app">
     <aside class="side">
@@ -124,7 +147,7 @@ export function render() {
       <header class="header"><div class="header-in">
         <div class="ttl hide-m"></div>
         ${UI.page === 'home' ? `<div class="ttl only-m-flex"><span class="m-logo">${cottonLogo('logo-s')}</span>${BRAND.replace('home', '<i>home</i>')}</div>` : `<div class="ttl only-m-flex m-ttl"><span>${esc(headTitle(UI.page))}</span></div>`}
-        ${UI.page === 'ai' ? '' : `<button class="icon-btn" data-act="ai-open" aria-label="AI-менеджер">${svg('ai')}<span class="hide-h">AI</span></button>`}
+        ${UI.page === 'ai' ? '' : `<button class="icon-btn" data-act="ai-open" aria-label="AI-менеджер" title="AI-менеджер">${svg('ai')}</button>`}
         <span class="hide-m">${themeBtn()}</span>
         <button class="icon-btn" data-act="notif-open" aria-label="Сповіщення${bell ? `: ${bell} нових` : ''}">${svg('bell')}${bell ? `<i class="badge">${bell}</i>` : ''}</button>
         <button class="icon-btn primary hide-m" data-act="quick-add" aria-label="Додати запис">${svg('plus')}<span>Додати</span></button>
@@ -140,7 +163,9 @@ export function render() {
   const drawerIn = !!(UI.aiOpen && UI.page !== 'ai') && !lastDrawer; lastDrawer = !!(UI.aiOpen && UI.page !== 'ai');
   root.classList.toggle('page-enter', enter); root.classList.toggle('drawer-enter', drawerIn);
   if (enter) countUp(root.querySelector('.wrap'));
+  afterLayout();
   if (UI.keepScroll) window.scrollTo(0, scroll); UI.keepScroll = true;
+  if (flip) flipPlay(flip);
   AI.afterRender();
   restoreEditing(keep);
   hydratePhotos(root);
@@ -151,11 +176,11 @@ function pageHead() {
   if (UI.page === 'home') return '';
   const sec = sectionOf(UI.page);
   const tabs = sec ? `<div class="tabs" role="tablist" aria-label="${SECTIONS[sec].name}">${SECTIONS[sec].tabs.map(([id, label]) => `<button role="tab" data-nav="${id}" class="tab ${UI.page === id ? 'on' : ''}" aria-selected="${UI.page === id}">${label}</button>`).join('')}</div>` : '';
-  return `<div class="page-title"><h1>${esc(headTitle(UI.page))}</h1>${tabs}</div>`;
+  return `<div class="page-title"><div class="pt-row"><h1>${esc(headTitle(UI.page))}</h1></div>${tabs}</div>`;
 }
 export function banners() {
   const st = Repo.status; let h = '';
-  if (st.demo) h += `<div class="storage-strip demo-strip"><span><b>Демо-режим.</b> Вигадані приклади. Ваші записи зберігаються окремо.</span><button class="btn sm" data-act="demo-exit">Вийти з демо</button></div>`;
+  if (st.demo) h += `<div class="storage-strip demo-strip"><span><b>Демо-режим.</b> <span class="long">Вигадані приклади. Ваші записи зберігаються окремо.</span></span><button class="btn sm" data-act="demo-exit">Вийти з демо</button></div>`;
   if (st.loadError) h += `<div class="storage-strip err"><span>${esc(st.loadError)}</span></div>`;
   if (!st.persistent && !st.loadError && !Cloud.user) h += `<div class="storage-strip err"><span><b>Сховище браузера недоступне.</b> Записи зникнуть після перезавантаження. Зробіть експорт перед закриттям сторінки.</span><button class="btn sm" data-act="export">Експорт</button></div>`;
   if (st.lastError) h += `<div class="storage-strip err"><span>${esc(st.lastError)}</span><button class="btn sm" data-act="export">Експорт</button></div>`;

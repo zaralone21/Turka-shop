@@ -1152,3 +1152,198 @@ table.t tr.total td { border-top: 1px solid var(--border-strong); }
 @media (max-width: 900px) { .grid-cards { grid-template-columns: minmax(0, 1fr); } }
 .pur-card .sup-top .trail { max-width: 38%; }
 .toolbar select.input { min-width: 130px; }
+
+/* =====================================================================
+   ФІНАЛЬНЕ ДОВЕДЕННЯ: плаваюче скляне меню, компактна головна, форми як
+   bottom sheet, прокручувані вкладки, плавні мікроанімації.
+   ===================================================================== */
+:root {
+  --tb-h: 58px;
+  --tb-bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) - 6px));
+  --tb-space: calc(var(--tb-h) + var(--tb-bottom) + 14px);
+  --spring-soft: cubic-bezier(.34, 1.2, .64, 1);
+  --kb: 0px;
+  interpolate-size: allow-keywords;
+}
+html, body { overscroll-behavior-x: none; }
+.app { min-height: 100dvh; }
+.side { height: 100dvh; }
+
+/* ---------- плаваюче скляне нижнє меню ---------- */
+@media (max-width: 900px) {
+  .tabbar { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: var(--tb-bottom); height: var(--tb-h); padding: 4px; border-radius: 24px; border: 1px solid var(--glass-border); border-top: 1px solid var(--glass-border);
+    background: var(--glass-hi), color-mix(in srgb, var(--surface) 62%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(170%); backdrop-filter: blur(20px) saturate(170%);
+    box-shadow: 0 8px 24px -10px rgba(41, 37, 33, .22), 0 0 0 .5px var(--glass-line), inset 0 1px 0 rgba(255, 255, 255, .5); }
+  :root[data-theme="dark"] .tabbar { background: var(--glass-hi), color-mix(in srgb, var(--surface) 70%, transparent); box-shadow: 0 10px 28px -10px rgba(0, 0, 0, .6), 0 0 0 .5px var(--glass-line), inset 0 1px 0 rgba(255, 255, 255, .06); }
+  .tabbar button { justify-content: center; padding: 0 2px; gap: 1px; font-size: .62rem; border-radius: 20px; z-index: 1; }
+  .tabbar button svg { width: 22px; height: 22px; }
+  .tabbar .tab-ind { top: 4px; bottom: 4px; left: 4px; height: auto; width: calc((100% - 8px) / 5); transform: translateX(calc(var(--to, 0) * 100%)); z-index: 0; }
+  .tabbar .tab-ind::before { width: 100%; border-radius: 20px; background: color-mix(in srgb, var(--primary) 12%, transparent); }
+  .page-enter .tabbar .tab-ind { animation: none; }
+  .tabbar .tab-ind.move { animation: k-ind .42s var(--spring-soft) both; }
+  .tabbar .badge { top: 3px; left: calc(50% + 6px); }
+  .main { padding-bottom: calc(var(--tb-space) + 8px); }
+  .fab { right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--tb-space) + 2px); width: 54px; height: 54px; box-shadow: 0 6px 16px -6px rgba(41, 37, 33, .35); }
+  .fab:active { transform: scale(.96); }
+  .toast-box { bottom: calc(var(--tb-space) + 66px); }
+  body::before { height: env(safe-area-inset-top, 0px); }
+}
+
+/* ---------- шапка ---------- */
+.icon-btn { width: 36px; padding: 0; }
+.icon-btn.primary { width: auto; padding: 0 12px; }
+.icon-btn .hide-h { display: none; }
+.header-in { gap: 6px; }
+@media (max-width: 900px) {
+  .header-in { padding-block: 6px; min-height: 48px; }
+  .m-logo { display: inline-flex; align-items: center; }
+  .logo-s { width: 26px; height: 26px; }
+  .header-in .ttl.only-m-flex { gap: 6px; font-size: 1rem; }
+}
+
+/* ---------- сторінка: заголовок із дією «Ще» ---------- */
+.page-title { position: relative; z-index: 4; }
+.pt-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.pt-row h1 { min-width: 0; }
+.pt-row .more-menu > summary.btn { min-height: 34px; padding: 4px 12px; border-color: var(--border); }
+.page-head:empty, .page-head .row:empty { display: none; }
+@media (max-width: 900px) {
+  .page-head > p, .page-head > div > p { display: none; }
+  .page-head.m-empty { display: none; }
+  .wrap { gap: 12px; }
+}
+/* демо-режим: компактна позначка на телефоні */
+.demo-strip .long { display: inline; }
+@media (max-width: 900px) {
+  .demo-strip { padding: 6px 6px 6px 12px; flex-wrap: nowrap; }
+  .demo-strip .long { display: none; }
+  .demo-strip .btn { min-height: 28px; padding: 3px 10px; }
+}
+
+/* ---------- компактна головна ---------- */
+.greet { gap: 0; }
+.greet h1 { font-size: 1.6rem; }
+.greet p { font-size: .86rem; }
+.dash, .dash .col-l, .dash .col-r { gap: 10px; }
+.dash .panel { padding: 14px 16px; }
+.dash .panel-head { margin-bottom: 6px; }
+.money-3 { margin-top: 6px; gap: 6px; }
+.money-3 .v { font-size: clamp(1rem, 4.4vw, 1.3rem); text-overflow: clip; }
+.money-3 .k { font-size: .74rem; }
+.dash .meter { margin-top: 10px; }
+.meter-row { margin-top: 6px; font-size: .74rem; }
+.banner-card { min-height: 0; padding: 14px 64px 14px 16px; gap: 3px; }
+.banner-card .k { font-size: .78rem; }
+.banner-card .big { font-size: 1.65rem; }
+.banner-card .s { font-size: .78rem; }
+.banner-card .meter { height: 5px; margin-top: 8px; }
+.banner-card .wm { width: 96px; height: 96px; right: -14px; top: -14px; opacity: .07; }
+.banner-card .go { width: 32px; height: 32px; margin-top: -16px; right: 14px; background: rgba(255, 255, 255, .16); transition: transform var(--t-fast) var(--ease), background var(--t-fast); }
+.banner-card:hover .go { transform: translateX(2px); background: rgba(255, 255, 255, .24); }
+.banner-card:active { transform: scale(.98); }
+.next-step-card { padding: 12px 16px !important; }
+.empty-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: .86rem; color: var(--text-muted); }
+.empty-row .btn { flex: none; }
+.hb-tasks .list .trow { padding: 10px 0; }
+
+/* ---------- планер: виконання завдання ---------- */
+.list-card .task { padding: 11px 0; }
+.trow .meta { gap: 5px; }
+.trow .meta .pill { font-size: .68rem; padding: 1px 7px; }
+.date-chip { font-size: .72rem; }
+.tick { position: relative; overflow: hidden; }
+.tick.completing { border-color: var(--ok-solid); color: #fff; background: var(--ok-solid); animation: k-tick .3s var(--ease); }
+.trow.completing .ttl { color: var(--text-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-muted) 70%, transparent); transition: color .2s; }
+.trow.completing { opacity: .75; transition: opacity .25s var(--ease); }
+.flip-move { transition: transform .32s var(--ease); }
+.flip-in { animation: k-fade-up .28s var(--ease) both; }
+
+/* ---------- форми й bottom sheet ---------- */
+.modal-back { overscroll-behavior: contain; }
+.modal-back.fading { opacity: 0; transition: opacity .24s var(--ease); }
+.modal-b { gap: 12px; }
+.form-grid { gap: 10px 12px; }
+.field { gap: 4px; }
+.field .lbl { font-size: .76rem; }
+.field .hint { font-size: .74rem; line-height: 1.35; }
+.form-sub { margin: 4px 0 -2px; padding-top: 8px; font-size: .88rem; }
+.modal textarea.input { min-height: 72px; }
+.modal-f { position: sticky; bottom: 0; background: inherit; }
+.modal-f .btn { min-height: 44px; }
+@media (max-width: 900px) {
+  .modal-back { height: 100dvh; padding-bottom: var(--kb); }
+  .modal, .modal.narrow, .modal.wide { max-height: calc(100dvh - var(--kb) - 10px - env(safe-area-inset-top, 0px)); transition: transform .3s var(--ease-sheet); touch-action: pan-y; }
+  .modal.dragging { transition: none; }
+  .modal.closing { transform: translateY(105%) !important; transition: transform .26s var(--ease); }
+  .modal-h { cursor: grab; touch-action: none; }
+  .modal::before { top: 7px; width: 38px; }
+  .modal > .modal-b { overscroll-behavior: contain; }
+  .modal-f { background: color-mix(in srgb, var(--surface) 96%, transparent); }
+}
+.modal.nudge { animation: k-nudge .32s var(--ease); }
+@keyframes k-nudge { 0%, 100% { transform: none; } 40% { transform: translateY(10px); } }
+
+/* меню «Ще» */
+.sheet-list .btn { transition: background var(--t-fast) var(--ease); border-radius: 10px; margin: 0 -6px; padding: 0 10px; width: calc(100% + 12px); }
+.sheet-list .btn + .btn { border-top: 0; box-shadow: 0 -1px 0 var(--border); }
+.sheet-list .btn:active { background: var(--surface-hover); transform: none; }
+.theme-seg button { transition: background var(--t) var(--ease), color var(--t), box-shadow var(--t); }
+
+/* ---------- прокручувані вкладки ---------- */
+.tabs { overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; flex-wrap: nowrap; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none !important; scroll-snap-align: center; white-space: nowrap; transition: color var(--t) var(--ease), background .3s var(--spring-soft); }
+@media (max-width: 900px) { .tabs { width: auto; max-width: calc(100% + 32px); margin: 0 -16px; padding: 3px; border-radius: 0; background: none; } .tabs .tab { background: var(--surface-2); border-radius: 99px; padding: 7px 14px; margin-right: 6px; } .tabs .tab:first-child { margin-left: 13px; } .tabs .tab:last-child { margin-right: 13px; } .tabs .tab.on { background: var(--primary); } }
+
+/* ---------- фінанси ---------- */
+.stat-cards { align-items: stretch; }
+.stat-cards .tile { justify-content: space-between; }
+.tile .v, .stat .v, .money-3 .v, .big-total .v { font-variant-numeric: tabular-nums; }
+.tile .v { white-space: nowrap; font-size: clamp(1rem, 4.6vw, 1.45rem); }
+.fin-total .big-total .v { font-size: clamp(1.4rem, 7vw, 1.75rem); }
+@media (max-width: 900px) { .fin-total { padding: 14px; } .stat-cards .tile { padding: 10px 12px; } }
+@media (max-width: 360px) { .tile .v { white-space: normal; } }
+
+/* ---------- відкриття ---------- */
+.hero-open { padding: 14px 16px; }
+.hero-open .big { font-size: 1.65rem; }
+.tl-item { padding: 10px 0; gap: 12px; }
+.tl-item .mn { gap: 2px; }
+.tl-item .sub { font-size: .76rem; }
+.tl-item .mn > span:last-child { margin-top: 3px; }
+.tl-bar { display: block; height: 4px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 6px; max-width: 220px; }
+.tl-bar i { display: block; height: 100%; border-radius: 99px; background: var(--warn-solid); transform-origin: left center; }
+.tl-item.done .tl-bar i { background: var(--ok-solid); }
+.page-enter .tl-bar i { animation: k-grow .6s var(--ease) .15s both; }
+.open-cols { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.open-cols > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+@media (max-width: 1000px) { .open-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- товари: картки на комп'ютері ---------- */
+.prod-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 8px; background: none; border: 0; box-shadow: none; overflow: visible; }
+.prod-cards .m-item { background: var(--surface); border: 1px solid var(--border) !important; border-radius: 16px; box-shadow: var(--shadow); }
+.prod-cards .m-item:hover { border-color: var(--border-strong) !important; }
+@media (max-width: 900px) { .prod-cards { grid-template-columns: minmax(0, 1fr); } }
+.view-seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border-radius: 10px; }
+.view-seg button { all: unset; cursor: pointer; padding: 5px 10px; border-radius: 8px; font-size: .8rem; color: var(--text-muted); font-weight: 500; }
+.view-seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 0 1px var(--border); }
+.view-seg button:focus-visible { outline: 2px solid var(--primary); }
+
+/* ---------- закупівлі: рядки на всю ширину ---------- */
+.pur-list { display: flex; flex-direction: column; gap: 8px; }
+.pur-list .pur-card .sup-top .trail { max-width: 45%; }
+
+/* ---------- мікроанімації ---------- */
+@keyframes k-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.page-enter .wrap > *, .page-enter .dash .col-l > *, .page-enter .dash .col-r > *, .page-enter .tiles > *, .page-enter .stat-cards > *, .page-enter .grid-cards > :nth-child(-n+8) { animation-duration: .25s; animation-timing-function: cubic-bezier(0, 0, .2, 1); }
+.btn:active, .icon-btn:active, .chip:active, .tab:active, .m-item:active, .row-item:active { transform: scale(.98); }
+details::details-content { transition: height .25s var(--ease), content-visibility .25s allow-discrete; height: 0; overflow: clip; }
+details[open]::details-content { height: auto; }
+.meter i, .progress i, .tl-bar i { transition: width .45s var(--ease); }
+.lead img[data-photo] { background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-hover) 50%, var(--surface-2) 100%); background-size: 200% 100%; animation: k-shimmer 1.3s linear infinite; }
+.typing i { animation-duration: 1.2s; }
+.chat-log, .drawer, .ai-chats { overscroll-behavior: contain; }
+.drawer { height: 100dvh; }
+@media (prefers-reduced-motion: reduce) { .flip-move { transition: none !important; } }
+.home-2 .c-budget, .home-2 .c-open, .home-2 .c-tasks, .home-2 .c-ai { grid-column: 1 / -1; }

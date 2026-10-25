@@ -11,7 +11,7 @@ import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
-import { D, NAV, UI, resolvePage, sectionOf, toast } from './shared.js';
+import { D, NAV, UI, resolvePage, sectionOf, setUserName, toast } from './shared.js';
 import { FAB_ACTION, MORE_PAGES, render, svg } from './shell.js';
 import { setThemeMode, themeMode } from './theme.js';
 
@@ -28,6 +28,7 @@ export const ACTIONS = {
   'rem-done': el => reminderDone(el.dataset.id), 'rem-snooze': el => snoozeSheet(el.dataset.id),
   'notif-open': () => openNotifCenter(),
   'ai-open': () => AI.open(), 'ai-close': () => AI.close(),
+  'prod-view': el => { try { localStorage.setItem('komfort-prod-view', el.dataset.v); } catch { /* приватний режим */ } render(); },
   'task-toggle': async el => { const t = Repo.get('tasks', el.dataset.id); const done = t.status !== 'done'; await Repo.update('tasks', t.id, { status: done ? 'done' : 'planned' }); toast(done ? 'Завдання виконано' : 'Завдання повернуто в роботу'); },
   'add-supplier': () => supplierForm(), 'edit-supplier': el => supplierForm(el.dataset.id), 'del-supplier': el => deleteSupplier(el.dataset.id),
   'open-supplier': el => { UI.supplierId = el.dataset.id; go('suppliers'); UI.supplierId = el.dataset.id; render(); },
@@ -97,6 +98,7 @@ export function moreSheet() {
 }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
 Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
+const reducedMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 /* Розгорнутий чекліст лишається розгорнутим після перемальовування сторінки. */
 document.addEventListener('toggle', e => { const el = e.target; if (el.matches && el.matches('details[data-cl]')) UI.openCl[el.open ? 'add' : 'delete'](el.dataset.cl); }, true);
 document.addEventListener('click', e => {
@@ -104,7 +106,14 @@ document.addEventListener('click', e => {
   const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { guardedGo(nav.dataset.nav); return; }
   const el = e.target.closest('[data-act]'); if (!el || (modalEl && modalEl.contains(el))) return;
   const a = el.dataset.act; if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'file') return;
-  if (ACTIONS[a]) { e.preventDefault(); ACTIONS[a](el); }
+  if (!ACTIONS[a]) return; e.preventDefault();
+  // Виконання завдання: чекбокс заповнюється, текст перекреслюється, і лише тоді список перебудовується.
+  if ((a === 'task-done' || (a === 'task-toggle' && !el.classList.contains('on'))) && !reducedMotion()) {
+    if (el.dataset.busy) return; el.dataset.busy = '1';
+    el.classList.add('completing'); el.closest('.trow')?.classList.add('completing');
+    setTimeout(() => ACTIONS[a](el), 280); return;
+  }
+  ACTIONS[a](el);
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-n-done]'); if (b) { closeModal(); reminderDone(b.dataset.nDone); return; }
@@ -140,6 +149,7 @@ document.addEventListener('submit', async e => {
     const first = body.split('\n')[0]; await Repo.create('notes', { title: first.length > 60 ? first.slice(0, 57) + '…' : first, body });
     toast('Нотатку збережено'); return;
   }
+  if (f.dataset.form === 'user-name') { e.preventDefault(); const inp = f.elements.namedItem('name'); setUserName(inp.value); inp.blur(); toast(inp.value.trim() ? 'Ім’я збережено' : 'Ім’я прибрано'); render(); return; }
   if (f.dataset.form === 'ai-ask') { e.preventDefault(); const q = f.q.value.trim(); if (q) AI.ask(q); return; }
   if (f.dataset.form !== 'total-budget') return; e.preventDefault();
   const n = parseNum(f.total.value);

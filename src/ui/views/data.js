@@ -1,7 +1,7 @@
 import { Cloud, countRecords, localLegacyData, migrationFlagKey } from '../../core/cloud.js';
 import { Repo } from '../../core/repo.js';
 import { esc, fmtDate } from '../../core/utils.js';
-import { D, VIEWS } from '../shared.js';
+import { D, VIEWS, userName } from '../shared.js';
 
 /* ---------- Дані й акаунт ---------- */
 function accountPanel() {
@@ -29,6 +29,9 @@ VIEWS.data = () => {
   <div class="grid-2">
     ${accountPanel()}
     ${migrationPanel()}
+    <section class="panel" style="display:flex;flex-direction:column;gap:10px"><h2>Привітання</h2>
+      <form class="row" data-form="user-name" style="flex-wrap:nowrap"><label class="field" style="flex:1;min-width:0"><span class="lbl">Як до вас звертатися</span><input class="input" name="name" id="user-name" maxlength="40" autocomplete="given-name" placeholder="Наприклад, Павло" value="${esc(userName())}"></label><button class="btn" type="submit" style="align-self:flex-end">Зберегти</button></form>
+      <p class="small muted" style="margin:0">Ім’я показується на головній і зберігається лише на цьому пристрої.</p></section>
     <section class="panel" style="display:flex;flex-direction:column;gap:10px"><h2>Резервна копія</h2>
       <p class="small muted" style="margin:0">Усі записи (постачальники, товари, закупівлі, нотатки, завдання, нагадування, бюджет, чати AI) в одному JSON-файлі. ${cloud ? 'Дані вже зберігаються на сервері, але власна копія не завадить.' : 'Робіть копію регулярно і перед очищенням браузера.'}</p>
       <div class="row"><button class="btn primary" data-act="export">Завантажити JSON</button><button class="btn" data-act="export-copy">Показати JSON</button></div></section>

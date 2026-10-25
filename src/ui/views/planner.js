@@ -27,7 +27,7 @@ VIEWS.planner = () => {
 const shortDate = iso => new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(iso + 'T00:00:00Z')).replace('.', '');
 export function taskCard(t) {
   const dn = t.checklist.filter(i => i.done).length, total = t.checklist.length, isDone = t.status === 'done';
-  return `<article class="task trow ${isOverdue(t) ? 'overdue' : ''} ${isDone ? 'done' : ''}">
+  return `<article class="task trow ${isOverdue(t) ? 'overdue' : ''} ${isDone ? 'done' : ''}" data-flip="t${t.id}">
     <button class="tick ${isDone ? 'on' : ''}" data-act="task-toggle" data-id="${t.id}" aria-pressed="${isDone}" aria-label="${isDone ? 'Повернути в роботу' : 'Позначити виконаним'}">✓</button>
     <div class="mn"><button class="ttl" data-act="edit-task" data-id="${t.id}">${esc(t.title)}</button>
       <div class="meta">${prioPill(t.priority)}${t.prep ? '<span class="pill info">підготовка</span>' : ''}${t.status === 'in_progress' ? '<span class="pill accent">У роботі</span>' : ''}${isOverdue(t) ? deadlineLabel(t) : ''}</div>

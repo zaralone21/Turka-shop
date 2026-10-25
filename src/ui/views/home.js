@@ -6,7 +6,7 @@ import { esc, fmtDate, fmtKyiv, fmtMoney, kyivParts, plural, todayISO } from '..
 import { AI } from '../ai.js';
 import { longToday, svg } from '../shell.js';
 import { cottonLogo } from '../brand.js';
-import { D, VIEWS, deadlineLabel, isOverdue, prioPill } from '../shared.js';
+import { D, VIEWS, isOverdue, prioPill, userName } from '../shared.js';
 
 /* ---------- Головна: компактний огляд. Кожен запис показується лише в одному з блоків. ---------- */
 const chev = () => svg('chev', 'class="chev"');
@@ -35,11 +35,11 @@ function todayItems(d) {
 function upcomingBlock({ urgent, items, more }) {
   const add = '<button class="btn sm ghost" data-act="add-task" aria-label="Додати завдання">' + svg('plus') + '</button>';
   const top = `<div class="panel-head"><button class="card-link" data-nav="planner" style="width:auto;flex:1"><h2>Найближчі справи${urgent.length ? ` <span class="cnt">${urgent.length}</span>` : ''}</h2><span class="small muted row" style="gap:2px">Усі${chev()}</span></button>${add}</div>`;
-  if (!items.length) return `<section class="panel hb-tasks c-tasks">${top}${mini('Немає завдань із термінами. Додайте першу справу, щоб нічого не загубилось.', 'add-task', 'Додати завдання')}</section>`;
+  if (!items.length) return `<section class="panel hb-tasks c-tasks">${top}<div class="empty-row"><span>Справ із термінами немає</span><button class="btn sm primary" data-act="add-task">Додати</button></div></section>`;
   const now = new Date();
   const row = x => x.kind === 'task'
-    ? `<div class="trow li ${isOverdue(x.t) ? 'overdue' : ''}"><button class="tick" data-act="task-done" data-id="${x.t.id}" aria-label="Позначити виконаним">✓</button><div class="mn"><button class="ttl" data-act="edit-task" data-id="${x.t.id}"><span class="nm">${esc(x.t.title)}</span></button>${x.t.priority === 'high' ? `<div class="meta">${prioPill('high')}</div>` : ''}</div><span class="date-chip ${isOverdue(x.t) ? 'bad' : ''}" ${isOverdue(x.t) ? 'title="Прострочено"' : ''}>${x.t.deadline === todayISO() ? 'сьогодні' : shortDate(x.t.deadline)}</span></div>`
-    : `<div class="trow li"><span class="li-ico" aria-hidden="true">${svg('bell')}</span><div class="mn"><button class="ttl" data-act="edit-reminder" data-id="${x.r.id}"><span class="nm">${esc(x.r.title)}</span></button>
+    ? `<div class="trow li ${isOverdue(x.t) ? 'overdue' : ''}" data-flip="t${x.t.id}"><button class="tick" data-act="task-done" data-id="${x.t.id}" aria-label="Позначити виконаним">✓</button><div class="mn"><button class="ttl" data-act="edit-task" data-id="${x.t.id}"><span class="nm">${esc(x.t.title)}</span></button>${x.t.priority === 'high' ? `<div class="meta">${prioPill('high')}</div>` : ''}</div><span class="date-chip ${isOverdue(x.t) ? 'bad' : ''}" ${isOverdue(x.t) ? 'title="Прострочено"' : ''}>${x.t.deadline === todayISO() ? 'сьогодні' : shortDate(x.t.deadline)}</span></div>`
+    : `<div class="trow li" data-flip="r${x.r.id}"><span class="li-ico" aria-hidden="true">${svg('bell')}</span><div class="mn"><button class="ttl" data-act="edit-reminder" data-id="${x.r.id}"><span class="nm">${esc(x.r.title)}</span></button>
       <div class="meta"><span class="pill ${isDue(x.r, now) ? 'bad' : 'accent'}">${isDue(x.r, now) ? 'Час настав · ' : ''}${esc(fmtKyiv(fireAt(x.r)))}</span>${isDue(x.r, now) ? `<button class="btn sm" data-act="rem-done" data-id="${x.r.id}">Виконано</button><button class="btn sm ghost" data-act="rem-snooze" data-id="${x.r.id}">Відкласти</button>` : ''}</div></div></div>`;
   return `<section class="panel hb-tasks c-tasks">${top}<div class="list">${items.map(row).join('')}</div>${more ? `<p class="small muted" style="margin:8px 0 0">І ще ${more} у планері.</p>` : ''}</section>`;
 }
@@ -93,7 +93,8 @@ function greeting(d, r) {
   const bad = r.blockers.filter(b => b.level === 'bad').length;
   const state = bad ? `${bad} ${plural(bad, 'питання потребує', 'питання потребують', 'питань потребують')} уваги.` : 'Усе під контролем.';
   const left = r.openingDate && r.daysLeft > 0 ? ` До відкриття ${r.daysLeft} ${plural(r.daysLeft, 'день', 'дні', 'днів')}.` : '';
-  return `<div class="greet"><span class="hero-date">${esc(longToday())}</span><h1>${hi}</h1><p>${state}${left}</p></div>`;
+  const name = userName();
+  return `<div class="greet"><span class="hero-date">${esc(longToday())}</span><h1>${hi}${name ? `, ${esc(name)}` : ''}</h1><p>${state}${left}</p></div>`;
 }
 
 VIEWS.home = () => {
