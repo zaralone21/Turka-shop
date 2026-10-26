@@ -3,14 +3,45 @@ import { applyChanges, planChanges, undoChanges } from '../core/aiTools.js';
 import { Cloud } from '../core/cloud.js';
 import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
-import { esc, fmtDate, fmtMoney, plural } from '../core/utils.js';
+import { esc, fmtDate, fmtMoney, plural, uid } from '../core/utils.js';
 import { copyText } from './backup.js';
-import { deletePhotos, importPhoto } from './photos.js';
+import { deletePhotos, importPhoto, savePhoto } from './photos.js';
 import { D, UI, VIEWS, toast } from './shared.js';
 import { cottonLogo } from './brand.js';
 
 /* ---------- AI-менеджер: чат, підказки, дії з підтвердженням ---------- */
-const S = { state: 'unknown', model: null, checkedAt: 0, busy: false, draft: '', focus: false };
+const S = { state: 'unknown', model: null, checkedAt: 0, busy: false, draft: '', focus: false, att: [] };
+
+/* ---------- Вставлені фото ----------
+   Фото, вставлені в чат (Ctrl+V, перетягування або кнопка), лишаються в пам'яті сторінки.
+   Моделі передаються лише їхні id; файл зберігається в товар, коли AI прикріплює його. */
+const MAX_ATT = 12, MAX_ATT_BYTES = 15 * 1024 * 1024;
+const PASTED = new Map(); // id → {file?, url?, preview}
+function addPasted(list) {
+  let added = 0, skipped = 0;
+  for (const x of list) {
+    if (S.att.length >= MAX_ATT) { skipped++; continue; }
+    if (x.file && (!/^image\//.test(x.file.type) || x.file.size > MAX_ATT_BYTES)) { skipped++; continue; }
+    const id = 'img-' + uid().slice(0, 8);
+    PASTED.set(id, { ...x, preview: x.file ? URL.createObjectURL(x.file) : x.url });
+    S.att.push(id); added++;
+  }
+  if (skipped) toast(S.att.length >= MAX_ATT ? `За раз можна вставити до ${MAX_ATT} фото` : 'Частину файлів пропущено: потрібне зображення до 15 МБ', 'error');
+  if (added) rerender();
+}
+/** Зображення з буфера: файли (Скопіювати зображення) або посилання з HTML сторінки. */
+function fromClipboard(dt) {
+  const files = [...(dt?.items || [])].filter(i => i.kind === 'file' && /^image\//.test(i.type)).map(i => i.getAsFile()).filter(Boolean);
+  if (files.length) return files.map(file => ({ file }));
+  const html = dt?.getData?.('text/html') || '';
+  const srcs = [...html.matchAll(/<img[^>]+src=["'](https:\/\/[^"'\s<>]+)["']/gi)].map(m => m[1].replace(/&amp;/g, '&'));
+  return [...new Set(srcs)].map(url => ({ url }));
+}
+const pastedApi = {
+  has: id => PASTED.has(id),
+  save: async (productId, id) => { const x = PASTED.get(id); if (!x) throw new Error('фото недоступне'); return x.file ? savePhoto(productId, x.file) : importPhoto(productId, x.url); },
+};
+const attThumbs = (ids, cls) => ids.map(id => PASTED.get(id)).filter(Boolean).map(x => `<img src="${esc(x.preview)}" alt="" class="${cls}" referrerpolicy="no-referrer">`).join('');
 
 const STATUS = {
   ready: ['accent', 'AI підключено'],
@@ -27,12 +58,12 @@ const STATUS_HINT = {
   signed_out: 'Увійдіть в обліковий запис, щоб ставити запитання AI-менеджеру.',
   error: 'Не вдалося зв’язатися з сервером AI. Перевірте інтернет і спробуйте пізніше.',
 };
-const TOOL_LABELS = {
+const TOOL_LABELS = { attach_photos: 'фото товару',
   get_overview: 'огляд справ', list_tasks: 'завдання', list_reminders: 'нагадування', get_budget: 'бюджет', list_purchases: 'закупівлі', list_cart: 'кошик закупівель',
   search_records: 'пошук', get_record: 'запис', compare_offers: 'порівняння цін', check_purchase_plan: 'розрахунок закупівлі', data_quality: 'перевірка даних',
   web_search: 'пошук у мережі', web_fetch: 'перегляд сайту', create_task: 'створення завдання', create_note: 'створення нотатки', create_reminder: 'створення нагадування', propose_changes: 'підготовка змін', draft_message: 'чернетка',
 };
-const OWN_CARD = new Set(['propose_product_photos', 'add_product_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
+const OWN_CARD = new Set(['propose_product_photos', 'add_product_photos', 'attach_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
 const MONEY = new Set(['purchasePrice', 'retailPrice', 'planned', 'paid', 'totalBudget', 'deliveryCost']);
 const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'view-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder', premises: 'open-ref', fitout: 'edit-fitout', monthly: 'edit-monthly' };
 const CREATED = { tasks: 'завдання', notes: 'нотатку', reminders: 'нагадування' };
@@ -96,10 +127,12 @@ async function saveThread(id, messages, container) {
   if (error) throw error;
 }
 async function send(text) {
-  text = String(text || '').trim(); if (!text || S.busy) return;
+  text = String(text || '').trim(); const attachments = [...S.att];
+  if ((!text && !attachments.length) || S.busy) return;
+  if (!text) text = attachments.length === 1 ? 'Фото товару' : 'Фото товарів';
   let chat = current();
   if (chat && chat.closed) { chat = null; toast('Попередня розмова закрита, тому почато нову'); }
-  S.busy = true; S.draft = ''; S.focus = true; rerender();
+  S.busy = true; S.draft = ''; S.att = []; S.focus = true; rerender();
   let thread = { messages: [], container: null };
   if (chat) {
     try { thread = await loadThread(chat); }
@@ -107,7 +140,7 @@ async function send(text) {
     if (chatSize({ messages: thread.messages, log: chat.log }) > CHAT_SOFT_LIMIT) { chat = null; thread = { messages: [], container: null }; toast('Попередня розмова дуже велика, тому почато нову'); }
   }
   if (!chat) { chat = await Repo.create('chats', { messages: [], log: [], notes: [], title: text.slice(0, 60) }); UI.chatId = chat.id; }
-  const result = await runTurn({ chat: { ...chat, ...thread }, text, repo: Repo, callModel, importPhoto: Cloud.user ? importPhoto : null, onUpdate: c => { S.live = c; rerender(); } });
+  const result = await runTurn({ chat: { ...chat, ...thread }, text, attachments, pasted: Cloud.user ? pastedApi : null, repo: Repo, callModel, importPhoto: Cloud.user ? importPhoto : null, onUpdate: c => { S.live = c; rerender(); } });
   let saved = false;
   if (Cloud.user && chatSize(result) <= CHAT_STORE_LIMIT) { try { await saveThread(chat.id, result.messages, result.container); saved = true; } catch {} }
   S.busy = false; S.live = null;
@@ -151,7 +184,8 @@ export function md(text) {
 const fieldName = f => FIELD[f] || f;
 const val = (f, v) => (MONEY.has(f) && v !== '—' && !isNaN(Number(v)) ? fmtMoney(Number(v)) : v);
 function entryHtml(e, i, interactive) {
-  if (e.role === 'user') return `<div class="msg user">${esc(e.text)}</div>`;
+  if (e.role === 'user') { const n = e.photos?.length || 0; const th = n ? attThumbs(e.photos, 'msg-att') : '';
+    return `<div class="msg user">${n ? `<div class="msg-atts">${th || `<span class="small">📎 Фото: ${n}</span>`}</div>` : ''}${esc(e.text)}</div>`; }
   if (e.role === 'assistant') return `<div class="msg assistant">${md(e.text)}</div>`;
   if (e.type === 'info') return `<div class="msg tool">${esc(e.text)}</div>`;
   if (e.type === 'error') return `<div class="msg err" role="alert">${esc(e.text)}</div>`;
@@ -206,7 +240,8 @@ function chatHtml(compact) {
     <div class="chat-log" id="chat-log" aria-live="polite">${body}${S.busy ? '<div class="msg tool">Думаю…</div>' : ''}</div>
     ${c && c.closed && !S.busy ? `<div class="callout" style="margin:0 12px 8px">Цю розмову закрито, бо її повна історія не збереглася. Можна продовжити роботу в новій розмові: AI отримає весь видимий текст цієї. <button class="btn sm primary" data-act="ai-continue" data-id="${esc(c.id)}" ${canAsk() ? '' : 'disabled'}>Продовжити</button></div>` : ''}
     ${log.length && hint && !canAsk() ? `<div class="callout warn" style="margin:0 12px 8px">${esc(hint)}</div>` : ''}
-    <form class="chat-form" data-form="ai-chat"><textarea class="input" name="q" id="ai-input" rows="1" placeholder="${canAsk() ? 'Напишіть запит…' : 'AI недоступний'}" aria-label="Повідомлення AI-менеджеру" ${canAsk() && !S.busy ? '' : 'disabled'}></textarea><button class="btn primary" type="submit" ${canAsk() && !S.busy ? '' : 'disabled'} aria-label="Надіслати">Надіслати</button></form>
+    ${S.att.length ? `<div class="chat-att" aria-label="Вставлені фото">${S.att.map((id, n) => { const x = PASTED.get(id); return x ? `<span class="att" title="Фото №${n + 1}"><img src="${esc(x.preview)}" alt="" referrerpolicy="no-referrer"><b>${n + 1}</b><button type="button" class="att-x" data-act="ai-att-del" data-id="${id}" aria-label="Прибрати фото №${n + 1}">✕</button></span>` : ''; }).join('')}</div>` : ''}
+    <form class="chat-form" data-form="ai-chat"><label class="btn ghost chat-attach ${canAsk() && !S.busy ? '' : 'disabled'}" title="Додати фото" aria-label="Додати фото">📎<input type="file" accept="image/*" multiple class="sr" id="ai-file" ${canAsk() && !S.busy ? '' : 'disabled'}></label><textarea class="input" name="q" id="ai-input" rows="1" placeholder="${canAsk() ? (S.att.length ? 'До якого товару ці фото? Напр. «до 3059»' : 'Напишіть запит або вставте фото (Ctrl+V)…') : 'AI недоступний'}" aria-label="Повідомлення AI-менеджеру" ${canAsk() && !S.busy ? '' : 'disabled'}></textarea><button class="btn primary" type="submit" ${canAsk() && !S.busy ? '' : 'disabled'} aria-label="Надіслати">Надіслати</button></form>
   </div>`;
 }
 
@@ -238,6 +273,12 @@ export const AI = {
     ta.oninput = () => { S.draft = ta.value; fit(); };
     fit();
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(ta.value); } };
+    ta.onpaste = e => { if (ta.disabled) return; const imgs = fromClipboard(e.clipboardData); if (!imgs.length) return; if (!imgs[0].file || !e.clipboardData.getData('text/plain')) e.preventDefault(); S.draft = ta.value; S.focus = true; addPasted(imgs); };
+    const form = ta.closest('form');
+    form.ondragover = e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); };
+    form.ondrop = e => { const files = [...(e.dataTransfer?.files || [])].filter(f => /^image\//.test(f.type)); if (!files.length || ta.disabled) return; e.preventDefault(); S.draft = ta.value; S.focus = true; addPasted(files.map(file => ({ file }))); };
+    const fi = document.getElementById('ai-file');
+    if (fi) fi.onchange = () => { const files = [...fi.files]; fi.value = ''; S.draft = ta.value; S.focus = true; addPasted(files.map(file => ({ file }))); };
     if (S.focus && !ta.disabled) { ta.focus(); S.focus = false; }
   },
   open() { UI.aiOpen = true; S.focus = true; if (!UI.chatId) UI.chatId = chats()[0]?.id || null; refreshStatus(); rerender(); },
@@ -253,6 +294,7 @@ export const AI = {
       UI.chatId = chat.id; rerender();
       await send('Продовжуй роботу з того місця, де зупинився.');
     },
+    'ai-att-del': el => { const id = el.dataset.id; S.att = S.att.filter(x => x !== id); const x = PASTED.get(id); if (x?.file) URL.revokeObjectURL(x.preview); PASTED.delete(id); S.focus = true; rerender(); },
     'ai-new': () => { UI.chatId = null; S.draft = ''; S.focus = true; rerender(); },
     'ai-chat': el => { UI.chatId = el.dataset.id; rerender(); },
     'ai-suggest': el => { if (UI.page !== 'ai' && !UI.aiOpen) AI.ask(el.dataset.q); else send(el.dataset.q); },

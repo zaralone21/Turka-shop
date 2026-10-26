@@ -38,7 +38,7 @@ export function textOf(content) {
 /** Видима історія розмови текстом — щоб продовжити її в новій розмові, коли повна історія недоступна. */
 export function transcriptOf(log, maxChars = 120_000) {
   const lines = (log || []).map(e => {
-    if (e.role === 'user') return `Користувач: ${e.text}`;
+    if (e.role === 'user') return `Користувач: ${e.text}${e.photos?.length ? ` [вставлено фото: ${e.photos.length}]` : ''}`;
     if (e.role === 'assistant') return `AI: ${e.text}`;
     if (e.type === 'created') return `[Створено ${e.collection}/${e.id}: ${e.title}${e.undone ? ', потім скасовано' : ''}]`;
     if (e.type === 'confirm') return `[Запропоновано зміни: ${e.summary}; стан: ${e.state}]`;
@@ -63,12 +63,16 @@ export const chatSize = chat => JSON.stringify(chat.messages || []).length + JSO
  * Один хід розмови. chat — {messages, log, notes}; повертає оновлений chat.
  * onUpdate(chat) викликається після кожного кроку, щоб інтерфейс показував прогрес.
  */
-export async function runTurn({ chat, text, repo, callModel, importPhoto = null, now = () => new Date(), onUpdate = () => {} }) {
+/** Підказка моделі про вставлені фото: лише номери й id, самі зображення моделі не передаються. */
+export const attachNote = ids => (ids.length ? `[Користувач вставив у повідомлення фото (${ids.length}): ${ids.map((id, i) => `№${i + 1} id=${id}`).join(', ')}. Прикріпи їх до товару інструментом attach_photos.]` : '');
+
+export async function runTurn({ chat, text, repo, callModel, importPhoto = null, pasted = null, attachments = [], now = () => new Date(), onUpdate = () => {} }) {
   chat = { ...chat, messages: [...(chat.messages || [])], log: [...(chat.log || [])] };
   const notes = (chat.notes || []).map(n => `[${n}]`).join('\n');
   chat.notes = [];
-  chat.messages.push({ role: 'user', content: [...danglingResults(chat.messages), { type: 'text', text: `${stamp(now())}${notes ? '\n' + notes : ''}\n${text}` }] });
-  chat.log.push({ role: 'user', text, at: now().toISOString() });
+  const att = attachNote(attachments);
+  chat.messages.push({ role: 'user', content: [...danglingResults(chat.messages), { type: 'text', text: `${stamp(now())}${notes ? '\n' + notes : ''}${att ? '\n' + att : ''}\n${text}` }] });
+  chat.log.push({ role: 'user', text, ...(attachments.length ? { photos: attachments } : {}), at: now().toISOString() });
   onUpdate(chat);
 
   for (let step = 0; step < MAX_STEPS; step++) {
@@ -99,7 +103,7 @@ export async function runTurn({ chat, text, repo, callModel, importPhoto = null,
     const results = [];
     for (const call of calls) {
       try {
-        const { result, effect } = await runTool(call.name, call.input, { repo, now: now(), importPhoto });
+        const { result, effect } = await runTool(call.name, call.input, { repo, now: now(), importPhoto, pasted });
         let out = JSON.stringify(result);
         if (out.length > RESULT_LIMIT) out = out.slice(0, RESULT_LIMIT) + '… [обрізано, уточніть запит]';
         results.push({ type: 'tool_result', tool_use_id: call.id, content: out });

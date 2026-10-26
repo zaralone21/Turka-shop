@@ -1347,3 +1347,14 @@ details[open]::details-content { height: auto; }
 .drawer { height: 100dvh; }
 @media (prefers-reduced-motion: reduce) { .flip-move { transition: none !important; } }
 .home-2 .c-budget, .home-2 .c-open, .home-2 .c-tasks, .home-2 .c-ai { grid-column: 1 / -1; }
+
+/* Вставлені в чат фото */
+.chat-att { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 12px 0; background: var(--surface); }
+.chat-att .att { position: relative; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.chat-att .att img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.chat-att .att b { position: absolute; left: 4px; bottom: 4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--surface); color: var(--text); font-size: 11px; line-height: 18px; text-align: center; }
+.chat-att .att-x { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border-radius: 12px; border: 0; background: var(--surface); color: var(--text); font-size: 12px; cursor: pointer; }
+.chat-form .chat-attach { flex: none; min-width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; }
+.chat-form .chat-attach.disabled { opacity: .45; pointer-events: none; }
+.msg-atts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.msg-atts .msg-att { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }

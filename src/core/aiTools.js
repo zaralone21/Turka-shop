@@ -298,7 +298,7 @@ export async function undoChanges(repo, undo) {
  * Повертає {result, effect}. result іде моделі; effect — для інтерфейсу:
  * {type:'created', collection, id, title} | {type:'confirm', summary, plan} | {type:'draft', supplierId, text}.
  */
-export async function runTool(name, input, { repo, now = new Date(), importPhoto = null }) {
+export async function runTool(name, input, { repo, now = new Date(), importPhoto = null, pasted = null }) {
   const d = repo.data; input = input && typeof input === 'object' ? input : {};
   switch (name) {
     case 'get_overview': return { result: overview(d, now) };
@@ -338,6 +338,32 @@ export async function runTool(name, input, { repo, now = new Date(), importPhoto
       const total = done.reduce((s, x) => s + x.added.length, 0);
       return { result: { added: total, products: done.map(x => ({ productId: x.productId, added: x.added.length, failed: x.failed })) },
         effect: total || done.some(x => x.failed.length) ? { type: 'photos', state: 'applied', batch: true, items: done, source } : null };
+    }
+    case 'attach_photos': {
+      // Фото, які користувач сам вставив у чат: файли зберігаються зі сторінки, модель бачить лише їхні id.
+      need(pasted && typeof pasted.save === 'function', 'Вставлені фото можна додавати лише після входу в обліковий запис');
+      const items = (Array.isArray(input.items) ? input.items : []).slice(0, 30);
+      need(items.length, 'Потрібен список: товар і id вставлених фото');
+      const done = [];
+      for (const it of items) {
+        const p = repo.data.products.find(x => x.id === it?.productId);
+        if (!p) { done.push({ productId: it?.productId || null, name: '', added: [], failed: ['товар не знайдено'] }); continue; }
+        const room = MAX_PHOTOS - (p.photos || []).length;
+        const ids = [...new Set((Array.isArray(it.photoIds) ? it.photoIds : []).map(String))];
+        const added = [], failed = [];
+        if (room <= 0) failed.push(`у товару вже ${MAX_PHOTOS} фото`);
+        else if (!ids.length) failed.push('не вказано фото');
+        for (const id of ids.slice(0, Math.max(0, room))) {
+          if (!pasted.has(id)) { failed.push(`фото ${id} недоступне, вставте його ще раз`); continue; }
+          try { added.push(await pasted.save(p.id, id)); } catch (e) { failed.push(String(e?.message || e)); }
+        }
+        if (room > 0 && ids.length > room) failed.push(`місця лише для ${room} фото`);
+        if (added.length) { const cur = repo.data.products.find(x => x.id === p.id); await repo.update('products', p.id, { photos: [...(cur.photos || []), ...added].slice(0, MAX_PHOTOS) }); }
+        done.push({ productId: p.id, name: p.name, added: added.map(x => x.id), failed });
+      }
+      const total = done.reduce((s, x) => s + x.added.length, 0);
+      return { result: { added: total, products: done.map(x => ({ productId: x.productId, added: x.added.length, failed: x.failed })) },
+        effect: { type: 'photos', state: 'applied', batch: true, items: done, source: '' } };
     }
     case 'create_task': {
       need(String(input.title || '').trim(), 'Потрібна назва завдання');
