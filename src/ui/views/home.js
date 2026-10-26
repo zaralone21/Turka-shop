@@ -1,17 +1,17 @@
 import { Calc } from '../../core/calc.js';
 import { runChecks } from '../../core/checks.js';
 import { fireAt, isDue } from '../../core/reminders.js';
-import { openingReadiness } from '../../core/opening.js';
-import { esc, fmtDate, fmtKyiv, fmtMoney, kyivParts, plural, todayISO } from '../../core/utils.js';
-import { AI } from '../ai.js';
+import { openingReadiness, monthlySummary } from '../../core/opening.js';
+import { paymentSchedule } from '../../core/workspace.js';
+import { esc, fmtDate, fmtKyiv, fmtMoney, kyivParts, todayISO } from '../../core/utils.js';
+
 import { longToday, svg } from '../shell.js';
-import { cottonLogo } from '../brand.js';
-import { D, VIEWS, isOverdue, prioPill, userName } from '../shared.js';
+
+import { D, VIEWS, isOverdue, prioPill } from '../shared.js';
 
 /* ---------- Головна: компактний огляд. Кожен запис показується лише в одному з блоків. ---------- */
 const chev = () => svg('chev', 'class="chev"');
 const head = (icon, title, nav, label) => `<div class="panel-head">${nav ? `<button class="card-link" data-nav="${nav}"><h2>${title}</h2><span class="small muted row" style="gap:2px">${label || ''}${chev()}</span></button>` : `<h2>${title}</h2>`}</div>`;
-const mini = (text, act, label, nav) => `<div class="empty mini"><p>${text}</p><button class="btn sm primary" ${nav ? `data-nav="${nav}"` : `data-act="${act}"`}>${label}</button></div>`;
 const refBtn = (text, ref, page) => ref
   ? `<button class="btn link" style="text-align:left;white-space:normal" data-act="open-ref" data-col="${ref.collection}" data-id="${ref.id}">${esc(text)}</button>`
   : `<button class="btn link" style="text-align:left;white-space:normal" data-nav="${page || 'home'}">${esc(text)}</button>`;
@@ -29,79 +29,46 @@ function todayItems(d) {
   const urgent = [...tasks, ...rems].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   const next = d.tasks.filter(t => t.status !== 'done' && t.deadline && t.deadline > today).sort((a, b) => a.deadline < b.deadline ? -1 : 1)
     .map(t => ({ kind: 'task', t, key: t.deadline + '2', later: true }));
-  return { urgent, items: [...urgent, ...next].slice(0, LIMIT), more: urgent.length > LIMIT ? urgent.length - LIMIT : 0 };
+  const undated = d.tasks.filter(t => t.status !== 'done' && !t.deadline).map(t => ({ kind: 'task', t }));
+  return { urgent, items: [...urgent, ...next, ...undated].slice(0, LIMIT), more: urgent.length > LIMIT ? urgent.length - LIMIT : 0 };
 }
 
 function upcomingBlock({ urgent, items, more }) {
-  const add = '<button class="btn sm ghost" data-act="add-task" aria-label="Додати завдання">' + svg('plus') + '</button>';
-  const top = `<div class="panel-head"><button class="card-link" data-nav="planner" style="width:auto;flex:1"><h2>Найближчі справи${urgent.length ? ` <span class="cnt">${urgent.length}</span>` : ''}</h2><span class="small muted row" style="gap:2px">Усі${chev()}</span></button>${add}</div>`;
-  if (!items.length) return `<section class="panel hb-tasks c-tasks">${top}<div class="empty-row"><span>Справ із термінами немає</span><button class="btn sm primary" data-act="add-task">Додати</button></div></section>`;
+  const top = `<div class="panel-head"><button class="card-link" data-nav="planner"><h2>Найближчі справи</h2><span class="small muted row" style="gap:2px">Усі справи${chev()}</span></button></div>`;
+  if (!items.length) return `<section class="panel hb-tasks c-tasks">${top}<p class="desk-empty">Немає незавершених справ. Додайте те, що хочете зробити.</p><button class="desk-add" data-act="add-task">${svg('plus')}Додати завдання</button></section>`;
   const now = new Date();
   const row = x => x.kind === 'task'
-    ? `<div class="trow li ${isOverdue(x.t) ? 'overdue' : ''}" data-flip="t${x.t.id}"><button class="tick" data-act="task-done" data-id="${x.t.id}" aria-label="Позначити виконаним">✓</button><div class="mn"><button class="ttl" data-act="edit-task" data-id="${x.t.id}"><span class="nm">${esc(x.t.title)}</span></button>${x.t.priority === 'high' ? `<div class="meta">${prioPill('high')}</div>` : ''}</div><span class="date-chip ${isOverdue(x.t) ? 'bad' : ''}" ${isOverdue(x.t) ? 'title="Прострочено"' : ''}>${x.t.deadline === todayISO() ? 'сьогодні' : shortDate(x.t.deadline)}</span></div>`
+    ? `<div class="trow li ${isOverdue(x.t) ? 'overdue' : ''}" data-flip="t${x.t.id}"><button class="tick" data-act="task-done" data-id="${x.t.id}" aria-label="Позначити виконаним">✓</button><div class="mn"><button class="ttl" data-act="edit-task" data-id="${x.t.id}"><span class="nm">${esc(x.t.title)}</span></button>${x.t.priority === 'high' ? `<div class="meta">${prioPill('high')}</div>` : ''}</div><span class="date-chip ${isOverdue(x.t) ? 'bad' : ''}" ${isOverdue(x.t) ? 'title="Прострочено"' : ''}>${!x.t.deadline ? 'Без терміну' : x.t.deadline === todayISO() ? 'сьогодні' : shortDate(x.t.deadline)}</span></div>`
     : `<div class="trow li" data-flip="r${x.r.id}"><span class="li-ico" aria-hidden="true">${svg('bell')}</span><div class="mn"><button class="ttl" data-act="edit-reminder" data-id="${x.r.id}"><span class="nm">${esc(x.r.title)}</span></button>
       <div class="meta"><span class="pill ${isDue(x.r, now) ? 'bad' : 'accent'}">${isDue(x.r, now) ? 'Час настав · ' : ''}${esc(fmtKyiv(fireAt(x.r)))}</span>${isDue(x.r, now) ? `<button class="btn sm" data-act="rem-done" data-id="${x.r.id}">Виконано</button><button class="btn sm ghost" data-act="rem-snooze" data-id="${x.r.id}">Відкласти</button>` : ''}</div></div></div>`;
-  return `<section class="panel hb-tasks c-tasks">${top}<div class="list">${items.map(row).join('')}</div>${more ? `<p class="small muted" style="margin:8px 0 0">І ще ${more} у планері.</p>` : ''}</section>`;
-}
-
-function budgetBlock(d) {
-  const b = Calc.budget(d);
-  if (b.total === null && !d.expenses.length) return `<section class="panel hb-budget c-budget">${head('budget', 'Бюджет відкриття', 'budget')}${mini('Задайте загальний бюджет відкриття, щоб бачити, чи вистачає грошей.', 'go-budget', 'Налаштувати бюджет')}</section>`;
-  const short = b.free !== null && b.free < 0;
-  const pct = b.total ? Math.min(100, Math.round(b.paid / b.total * 100)) : 0;
-  return `<section class="panel hb-budget c-budget">${head('budget', 'Бюджет відкриття', 'budget')}
-    <div class="money-3 stats">
-      <div class="stat"><span class="v">${fmtMoney(b.paid)}</span><span class="k">Сплачено</span></div>
-      <div class="stat"><span class="v">${fmtMoney(b.toPay)}</span><span class="k">Ще потрібно</span></div>
-      <div class="stat"><span class="v ${short ? 'bad' : b.free === null ? '' : 'good'}">${b.free === null ? '—' : fmtMoney(Math.abs(b.free))}</span><span class="k">${short ? 'Нестача' : 'Залишок'}</span></div></div>
-    ${b.total ? `<div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Сплачено від бюджету ${fmtMoney(b.total)}"><i class="${b.paid > b.total ? 'bad' : ''}" style="width:${pct}%"></i></div>
-      <div class="meter-row"><span>Усього ${fmtMoney(b.total)}${b.deposit.needed ? ` · депозит ${fmtMoney(b.deposit.needed)}` : ''}</span><span class="num">${pct}%</span></div>`
-      : '<p class="small muted" style="margin:10px 0 0"><button class="btn link" data-nav="budget">Задайте загальний бюджет</button>, щоб бачити залишок.</p>'}</section>`;
-}
-
-/** Підготовка: прогрес, дата і один найближчий важливий крок, якого немає в «Найближчих справах». */
-function openingBlock(d, shownTaskIds) {
-  const r = openingReadiness(d); const p = r.prep;
-  const step = r.blockers.find(b => !(b.ref && b.ref.collection === 'tasks' && shownTaskIds.has(b.ref.id)))
-    || (() => { const t = d.tasks.filter(x => x.prep && x.status !== 'done' && !shownTaskIds.has(x.id)).sort((a, b) => (a.deadline || '9999') < (b.deadline || '9999') ? -1 : 1)[0];
-      return t ? { level: 'info', text: t.title + (t.deadline ? ` · до ${fmtDate(t.deadline)}` : ''), ref: { collection: 'tasks', id: t.id } } : null; })();
-  const when = r.openingDate ? `Відкриття ${fmtDate(r.openingDate)} · ${r.daysLeft > 0 ? `через ${r.daysLeft} ${plural(r.daysLeft, 'день', 'дні', 'днів')}` : r.daysLeft === 0 ? 'сьогодні' : `минула ${-r.daysLeft} ${plural(-r.daysLeft, 'день', 'дні', 'днів')} тому`}` : 'Дату відкриття ще не задано';
-  const banner = `<button class="banner-card hb-open" data-nav="opening" aria-label="План відкриття"><span class="wm" aria-hidden="true">${cottonLogo()}</span>
-    <span class="k">Підготовка до відкриття</span>
-    ${p.total ? `<span class="big">${p.pct}%</span><span class="s">${p.done} з ${p.total} ${plural(p.total, 'завдання', 'завдання', 'завдань')} · ${esc(when)}</span><span class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p.pct}" aria-label="Виконано завдань підготовки"><i style="width:${p.pct}%"></i></span>`
-      : `<span class="big" style="font-size:1.35rem">${r.openingDate ? esc(fmtDate(r.openingDate)) : 'Почніть план'}</span><span class="s">${esc(when)}. Позначайте завдання як «підготовка», щоб бачити прогрес.</span>`}
-    <span class="go" aria-hidden="true">${svg('arrow')}</span></button>`;
-  const next = step ? `<div class="panel next-step-card"><span class="small muted">Найближчий важливий крок</span><div class="hint-list" style="margin-top:4px"><div class="row" style="gap:8px;align-items:flex-start;flex-wrap:nowrap">${dot(step.level)}${refBtn(step.text, step.ref, 'opening')}</div></div></div>` : '';
-  return { html: `<div class="c-open" style="display:flex;flex-direction:column;gap:12px">${banner}${next}</div>`, stepRef: step && step.ref, r };
-}
-
-/** До трьох підказок, які не повторюють інші блоки головної. */
-function aiBlock(d, stepRef) {
-  const order = { bad: 0, warn: 1, info: 2 };
-  const repeats = c => c.page === 'planner' || c.page === 'reminders' || /перевищують бюджет/.test(c.text)
-    || (stepRef && c.ref && c.ref.collection === stepRef.collection && c.ref.id === stepRef.id);
-  const checks = runChecks(d).filter(c => !repeats(c)).sort((a, b) => order[a.level] - order[b.level]).slice(0, 3);
-  return `<section class="panel hb-ai c-ai">${head('ai', 'AI-менеджер', 'ai', 'Чат')}<div style="margin:-4px 0 8px">${AI.statusPill()}</div>
-    ${checks.length ? `<ul class="hint-list">${checks.map(c => `<li>${dot(c.level)}${refBtn(c.text, c.ref, c.page)}</li>`).join('')}</ul>` : '<p class="small muted" style="margin:0">Нових підказок немає.</p>'}
-    <form class="ask" data-form="ai-ask"><input class="input" name="q" id="home-ai-q" data-unsaved placeholder="Запитайте AI-менеджера" autocomplete="off" aria-label="Запит до AI-менеджера"><button class="btn primary" type="submit">Запитати</button></form></section>`;
-}
-
-/** Привітання за київським часом і один рядок про стан магазину з реальних даних. */
-function greeting(d, r) {
-  const h = kyivParts().h;
-  const hi = h < 5 ? 'Доброї ночі' : h < 12 ? 'Доброго ранку' : h < 18 ? 'Доброго дня' : 'Доброго вечора';
-  const bad = r.blockers.filter(b => b.level === 'bad').length;
-  const state = bad ? `${bad} ${plural(bad, 'питання потребує', 'питання потребують', 'питань потребують')} уваги.` : 'Усе під контролем.';
-  const left = r.openingDate && r.daysLeft > 0 ? ` До відкриття ${r.daysLeft} ${plural(r.daysLeft, 'день', 'дні', 'днів')}.` : '';
-  const name = userName();
-  return `<div class="greet"><span class="hero-date">${esc(longToday())}</span><h1>${hi}${name ? `, ${esc(name)}` : ''}</h1><p>${state}${left}</p></div>`;
+  return `<section class="panel hb-tasks c-tasks">${top}<div class="list">${items.map(row).join('')}</div>${more ? `<p class="small muted" style="margin:8px 0 0">І ще ${more} у справах.</p>` : ''}<button class="desk-add" data-act="add-task">${svg('plus')}Додати завдання</button></section>`;
 }
 
 VIEWS.home = () => {
   const d = D();
   const t = todayItems(d);
-  const shown = new Set(t.items.filter(x => x.kind === 'task').map(x => x.t.id));
-  const op = openingBlock(d, shown);
-  return `${greeting(d, op.r)}
-  <div class="dash home-2"><div class="col-l">${budgetBlock(d)}${upcomingBlock(t)}</div><div class="col-r">${op.html}${aiBlock(d, op.stepRef)}</div></div>`;
+
+  const r = openingReadiness(d);
+  const b = Calc.budget(d), monthly = monthlySummary(d), p = r.prep;
+  const heading = `<div class="desk-heading"><div><span class="desk-date">${esc(longToday())}</span><h1>Мій магазин</h1><p>Справи, записи та гроші в одному місці.</p></div><button class="btn primary" data-act="add-task">${svg('plus')}Нове завдання</button></div>`;
+  const stats = `<form class="workspace-quick" data-form="workspace-quick"><label for="home-quick">Швидкий запис</label><div><input class="input" id="home-quick" name="q" data-unsaved placeholder="Стелаж — 2 500 грн · завтра написати постачальнику" autocomplete="off"><button class="btn" type="submit">${svg('plus')}Записати</button></div></form>`;
+  const money = `<section class="panel desk-money">${head('budget', 'Гроші', 'budget', 'Фінанси')}<span class="desk-label">${b.free !== null && b.free < 0 ? 'Перевищення бюджету' : 'Вільно з бюджету відкриття'}</span><strong class="desk-balance ${b.free !== null && b.free < 0 ? 'bad' : ''}">${b.free === null ? 'Не задано' : fmtMoney(Math.abs(b.free))}</strong><dl class="desk-ledger"><div><dt>Загальний бюджет</dt><dd>${b.total === null ? '—' : fmtMoney(b.total)}</dd></div><div><dt>Вже сплачено</dt><dd>${fmtMoney(b.paid)}</dd></div><div><dt>Ще потрібно сплатити</dt><dd>${fmtMoney(b.toPay)}</dd></div></dl><button class="desk-monthly" data-nav="monthly"><span>Щомісячні витрати</span><b>${fmtMoney(monthly.total)}</b>${chev()}</button><button class="desk-add" data-act="add-expense">${svg('plus')}Записати витрату</button></section>`;
+  const opening = `<section class="panel desk-opening">${head('premises', 'Відкриття магазину', 'opening', 'План')}<div class="desk-opening-line"><span>${r.openingDate ? fmtDate(r.openingDate) : 'Дата не задана'}</span>${p.total ? `<b>${p.done} / ${p.total} завдань</b>` : ''}</div>${p.total ? `<div class="meter" role="progressbar" aria-label="Підготовка до відкриття" aria-valuenow="${p.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${p.pct}%"></i></div>` : '<p class="desk-empty">Додайте завдання підготовки у план відкриття.</p>'}</section>`;
+  const checks = runChecks(d).filter(c => c.level !== 'info' && ['budget','purchases',...(d.settings.storeOpened?[]:['premises','fitout'])].includes(c.page)).slice(0, 3);
+  const attention = checks.length ? `<section class="panel desk-attention">${head('ai', 'Потребує уваги', 'ai', 'Допомога')}<ul class="hint-list">${checks.map(c => `<li>${dot(c.level)}${refBtn(c.text, c.ref, c.page)}</li>`).join('')}</ul></section>` : '';
+  const payments=paymentSchedule(d).filter(x=>x.date).slice(0,3);
+  const payBlock=`<section class="panel desk-payments">${head('budget','Найближчі платежі','payments','Календар')}${payments.length?payments.map(x=>`<button class="desk-delivery" data-nav="payments"><span class="desk-delivery-body"><b>${esc(x.title)}</b><small>${fmtDate(x.date)}${x.date<todayISO()?' · перевірити оплату':''}</small></span><span class="desk-delivery-sum">${x.amount===null?'Сума не задана':fmtMoney(x.amount)}${chev()}</span></button>`).join(''):'<p class="desk-empty">Додайте дату до витрати або день оплати щомісячної статті.</p>'}</section>`;
+  return `${heading}${stats}<div class="desk-layout"><div class="desk-main">${upcomingBlock(t)}${payBlock}${deliveries(d)}${recentNotes(d)}</div><aside class="desk-aside">${money}${d.settings.storeOpened?'':opening}${attention}<button class="desk-assistant" data-nav="firstbuy">${svg('purchases')}<span><b>Перша закупівля</b><small>Асортимент, кількість і планові ціни</small></span>${svg('arrow')}</button><button class="desk-assistant" data-nav="ai">${svg('ai')}<span><b>AI-помічник</b><small>Обговорити плани або свої записи</small></span>${svg('arrow')}</button></aside></div>`;
 };
+
+function recentNotes(d) {
+  const notes = [...d.notes].sort((a, b) => Number(b.pinned) - Number(a.pinned) || (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, 3);
+  return `<section class="panel desk-notes">${head('notes', 'Під рукою', 'notes', 'Усі нотатки')}${notes.length ? notes.map(n => `<button class="desk-note" data-act="edit-note" data-id="${n.id}"><span class="desk-note-title">${esc(n.title || 'Без назви')}${n.pinned ? '<span class="desk-pinned">Закріплено</span>' : ''}</span><span class="desk-note-preview">${esc(n.body || 'Відкрити нотатку')}</span></button>`).join('') : '<p class="desk-empty">Ідеї, контакти й домовленості можна зберігати тут.</p>'}<button class="desk-add" data-act="add-note">${svg('plus')}Нова нотатка</button></section>`;
+}
+
+function deliveries(d) {
+  const list = d.purchases.filter(p => ['ordered', 'awaiting'].includes(p.status)).sort((a, b) => (a.expectedDate || '9999').localeCompare(b.expectedDate || '9999')).slice(0, 3);
+  return `<section class="panel desk-deliveries">${head('suppliers', 'Очікувані доставки', 'purchases', 'Закупівлі')}${list.length ? list.map(p => `<button class="desk-delivery" data-act="edit-purchase" data-id="${p.id}"><span class="desk-delivery-icon">${svg('suppliers')}</span><span class="desk-delivery-body"><b>${esc(p.title)}</b><small>${p.expectedDate ? fmtDate(p.expectedDate) : 'Дату не вказано'}</small></span><span class="desk-delivery-sum">${fmtMoney(Calc.purchaseTotal(p).total)}${chev()}</span></button>`).join('') : '<p class="desk-empty">Замовлень у дорозі поки немає.</p>'}<button class="desk-add" data-act="add-purchase">${svg('plus')}Нова закупівля</button></section>`;
+}
+
+

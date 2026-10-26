@@ -10,7 +10,8 @@ const groupOf = t => t.status === 'done' ? 'Виконані' : isOverdue(t) ? '
 VIEWS.planner = () => {
   const d = D(); const showDone = d.settings.ui.showDoneTasks;
   const done = d.tasks.filter(t => t.status === 'done').length;
-  const head = `<div class="page-head"><div><p>${d.tasks.length - done} невиконаних · ${done} виконано</p></div><button class="btn primary hide-m" data-act="add-task">+ Нове завдання</button></div>`;
+  const stats = `<div class="planner-overview"><div><span class="planner-number">${d.tasks.length - done}</span><span>У планах</span></div><div><span class="planner-number">${d.tasks.filter(t => t.status === 'in_progress').length}</span><span>У роботі</span></div><div><span class="planner-number">${done}</span><span>Завершено</span></div><div class="planner-quote">Одна виконана справа —<br>ще один крок до відкриття.</div></div>`;
+  const head = `<div class="page-head"><div><p>Плануйте, розставляйте пріоритети та відмічайте зроблене.</p></div><button class="btn primary hide-m" data-act="add-task">+ Нове завдання</button></div>${stats}`;
   if (!d.tasks.length) return head + emptyState('Розбийте підготовку до відкриття на завдання з дедлайнами та чеклістами.', 'add-task', 'Додати перше завдання');
   const base = d.tasks.filter(t => (showDone || t.status !== 'done') && (!UI.f.taskStatus || t.status === UI.f.taskStatus));
   const list = base.filter(t => !UI.f.taskPrio || t.priority === UI.f.taskPrio).sort(taskSort);

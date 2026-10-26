@@ -7,6 +7,7 @@ import { esc, fmtDate, fmtMoney, plural } from '../core/utils.js';
 import { copyText } from './backup.js';
 import { deletePhotos, importPhoto } from './photos.js';
 import { D, UI, VIEWS, toast } from './shared.js';
+import { cottonLogo } from './brand.js';
 
 /* ---------- AI-менеджер: чат, підказки, дії з підтвердженням ---------- */
 const S = { state: 'unknown', model: null, checkedAt: 0, busy: false, draft: '', focus: false };
@@ -21,7 +22,7 @@ const STATUS = {
   error: ['bad', 'AI тимчасово недоступний'],
 };
 const STATUS_HINT = {
-  no_server: 'AI працює через сервер облікових записів. Його ще не підключено, тому відповіді недоступні. Автоматичні перевірки нижче працюють і без AI.',
+  no_server: 'Помічника ще не підключено. Поки що користуйтеся планером, бюджетом і підказками на головній — вони працюють без AI.',
   not_configured: 'Сервер працює, але ключ AI ще не додано (секрет ANTHROPIC_API_KEY у Supabase). Без нього відповіді недоступні; автоматичні перевірки працюють.',
   signed_out: 'Увійдіть в обліковий запис, щоб ставити запитання AI-менеджеру.',
   error: 'Не вдалося зв’язатися з сервером AI. Перевірте інтернет і спробуйте пізніше.',
@@ -199,8 +200,8 @@ function chatHtml(compact) {
   const c = S.busy && S.live ? S.live : current();
   const log = c ? c.log : [];
   const hint = STATUS_HINT[S.state];
-  const body = log.length ? logHtml(log, !S.busy) : `<div class="empty mini" style="margin:auto"><p>${canAsk() ? 'Запитайте про бюджет, постачальників, ціни, закупівлі чи справи. AI бачить ваші записи, може шукати в мережі й відкривати сайти постачальників, але нічого не надсилає й не замовляє сам.' : esc(hint || '')}</p>
-      ${canAsk() ? `<div class="row" style="justify-content:center">${SUGGEST.map(s => `<button class="btn sm" data-act="ai-suggest" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : ''}</div>`;
+  const body = log.length ? logHtml(log, !S.busy) : `<div class="chat-welcome"><span class="chat-emblem">${cottonLogo()}</span><span class="page-eyebrow">КОМФОРТ HOME · AI</span><h2>З чого почнемо сьогодні?</h2><p>${canAsk() ? 'Разом сплануємо справи, розберемося з бюджетом і підготуємо наступну закупівлю.' : esc(hint || '')}</p>
+      ${canAsk() ? `<div class="chat-prompts">${SUGGEST.slice(0, 4).map(s => `<button class="btn" data-act="ai-suggest" data-q="${esc(s)}">${esc(s)}<span aria-hidden="true">↗</span></button>`).join('')}</div>` : ''}</div>`;
   return `<div class="chat">
     <div class="chat-log" id="chat-log" aria-live="polite">${body}${S.busy ? '<div class="msg tool">Думаю…</div>' : ''}</div>
     ${c && c.closed && !S.busy ? `<div class="callout" style="margin:0 12px 8px">Цю розмову закрито, бо її повна історія не збереглася. Можна продовжити роботу в новій розмові: AI отримає весь видимий текст цієї. <button class="btn sm primary" data-act="ai-continue" data-id="${esc(c.id)}" ${canAsk() ? '' : 'disabled'}>Продовжити</button></div>` : ''}
@@ -214,7 +215,7 @@ VIEWS.ai = () => {
   const list = chats();
   return `<div class="page-head"><div><p>${statusPill()}${S.model ? ` <span class="small muted">${esc(S.model)}</span>` : ''}</p></div><button class="btn" data-act="ai-new">+ Нова розмова</button></div>
   <div class="ai-layout">
-    <div class="ai-chats" aria-label="Розмови">${list.length ? list.map(c => `<button class="li-btn ${c.id === UI.chatId ? 'on' : ''}" data-act="ai-chat" data-id="${c.id}">${esc(c.title || 'Розмова')}<div class="small muted">${fmtDate(c.updatedAt)}</div></button>`).join('') : '<p class="small muted" style="margin:0">Історія розмов з’явиться тут.</p>'}
+    <div class="ai-chats" aria-label="Розмови"><span class="chat-history-label">ВАШІ РОЗМОВИ</span>${list.length ? list.map(c => `<button class="li-btn ${c.id === UI.chatId ? 'on' : ''}" data-act="ai-chat" data-id="${c.id}"><span class="chat-title">${esc(c.title || 'Розмова')}</span><div class="small muted">${fmtDate(c.updatedAt)}</div></button>`).join('') : '<p class="small muted" style="margin:0">Тут зберігатимуться ваші розмови з помічником.</p>'}
       ${list.length && UI.chatId ? `<button class="btn sm ghost danger" data-act="ai-del" data-id="${UI.chatId}" style="margin-top:8px">Видалити розмову</button>` : ''}</div>
     ${chatHtml(false)}
   </div>`;
@@ -254,7 +255,7 @@ export const AI = {
     },
     'ai-new': () => { UI.chatId = null; S.draft = ''; S.focus = true; rerender(); },
     'ai-chat': el => { UI.chatId = el.dataset.id; rerender(); },
-    'ai-suggest': el => send(el.dataset.q),
+    'ai-suggest': el => { if (UI.page !== 'ai' && !UI.aiOpen) AI.ask(el.dataset.q); else send(el.dataset.q); },
     'ai-del': async el => {
       const c = Repo.get('chats', el.dataset.id); if (!c) return;
       await Repo.remove('chats', c.id); UI.chatId = null; toast('Розмову видалено', null, () => Repo.restore('chats', c.id, c));

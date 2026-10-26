@@ -13,6 +13,10 @@ export const FORMULAS = `<details class="explain"><summary>Формули</summa
 /** Вигляд списку на комп'ютері: картки (типово) або таблиця. Налаштування лише цього пристрою. */
 export const prodView = () => { try { return localStorage.getItem('komfort-prod-view') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } };
 export function productMobile(list, showSupplier, cls = 'only-m') {
+  if (cls === 'prod-cards') return `<div class="product-gallery">${list.map(p => {
+    const cost = Calc.unitCost(p), margin = Calc.margin(cost, p.retailPrice);
+    return `<button class="catalog-card" data-act="edit-product" data-id="${p.id}"><span class="catalog-image">${p.photos?.length ? photoImg(p.photos[0], '', p.name) : `<span class="catalog-placeholder">${svg('products')}<span>Фото ще немає</span></span>`}<span class="catalog-edit">${svg('note')}</span>${p.category ? `<span class="catalog-category">${esc(p.category)}</span>` : ''}</span><span class="catalog-info"><span class="catalog-meta">${esc([p.sku && 'АРТ. ' + p.sku, showSupplier && supplierName(p.supplierId)].filter(Boolean).join(' · ')) || 'КАТАЛОГ МАГАЗИНУ'}</span><span class="catalog-name">${esc(p.name)}</span>${p.sizes ? `<span class="catalog-sizes">Розміри: ${esc(p.sizes)}</span>` : ''}<span class="catalog-prices"><span><span class="k">Закупівля / од.</span><b>${fmtMoney(cost)}</b></span><span><span class="k">Роздріб</span><b class="retail">${isNum(p.retailPrice) ? fmtMoney(p.retailPrice) : 'Не задано'}</b></span></span><span class="catalog-bottom"><span>Маржа <b>${fmtPct(margin)}</b></span><span>${p.priceDate ? fmtDate(p.priceDate) : 'Ціну не перевірено'}</span></span></span></button>`;
+  }).join('')}</div>`;
   return `<div class="m-list ${cls}">${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);
     const sub = [p.sizes && 'Розміри: ' + p.sizes, showSupplier && (p.supplierId ? supplierName(p.supplierId) : 'без постачальника'), p.sku && 'арт. ' + p.sku].filter(Boolean).map(esc).join(' · ');

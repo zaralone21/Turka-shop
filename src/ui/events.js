@@ -90,15 +90,15 @@ export function moreSheet() {
   const items = MORE_PAGES.map(id => NAV.find(x => x[0] === id) || [id, id === 'data' ? 'Дані й акаунт' : id, id]);
   const modes = [['light', 'sun', 'Світла'], ['dark', 'moon', 'Темна'], ['system', 'monitor', 'Як у системі']]; const m = themeMode();
   openModal({ title: 'Ще', narrow: true, body: `<div class="modal-b"><div class="sheet-card"><div class="sheet-list">${items.map(([id, label, icon]) => `<button class="btn" data-go="${id}">${svg(icon)}${label}${svg('chev', 'class="chev"')}</button>`).join('')}</div></div>
-    <div class="theme-seg" role="group" aria-label="Тема">${modes.map(([k, icon, label]) => `<button type="button" data-theme-mode="${k}" aria-pressed="${m === k}">${svg(icon)}${label}</button>`).join('')}</div></div>`,
+    <button class="btn" type="button" data-local-history>${svg('history')}Історія змін цього сеансу</button><div class="theme-seg" role="group" aria-label="Тема">${modes.map(([k, icon, label]) => `<button type="button" data-theme-mode="${k}" aria-pressed="${m === k}">${svg(icon)}${label}</button>`).join('')}</div></div>`,
     onMount: el => {
       el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { closeModal(); guardedGo(b.dataset.go); });
+      el.querySelector('[data-local-history]').onclick = () => ACTIONS['change-history']();
       el.querySelectorAll('[data-theme-mode]').forEach(b => b.onclick = () => setThemeMode(b.dataset.themeMode));
     } });
 }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
 Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
-const reducedMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 /* Розгорнутий чекліст лишається розгорнутим після перемальовування сторінки. */
 document.addEventListener('toggle', e => { const el = e.target; if (el.matches && el.matches('details[data-cl]')) UI.openCl[el.open ? 'add' : 'delete'](el.dataset.cl); }, true);
 document.addEventListener('click', e => {
@@ -107,12 +107,7 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || (modalEl && modalEl.contains(el))) return;
   const a = el.dataset.act; if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'file') return;
   if (!ACTIONS[a]) return; e.preventDefault();
-  // Виконання завдання: чекбокс заповнюється, текст перекреслюється, і лише тоді список перебудовується.
-  if ((a === 'task-done' || (a === 'task-toggle' && !el.classList.contains('on'))) && !reducedMotion()) {
-    if (el.dataset.busy) return; el.dataset.busy = '1';
-    el.classList.add('completing'); el.closest('.trow')?.classList.add('completing');
-    setTimeout(() => ACTIONS[a](el), 280); return;
-  }
+  // Дія виконується одразу, без декоративної затримки.
   ACTIONS[a](el);
 });
 document.addEventListener('click', e => {

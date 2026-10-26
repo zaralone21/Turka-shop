@@ -13,7 +13,8 @@ VIEWS.notes = () => {
   return head + `
   <div class="toolbar"><input class="input grow" id="f-noteQ" data-filter="noteQ" placeholder="Пошук у нотатках…" value="${esc(UI.f.noteQ)}" aria-label="Пошук нотаток"></div>
   ${tags.length ? `<div class="chips"><button class="chip ${!UI.f.noteTag ? 'on' : ''}" data-act="note-tag" data-tag="">Усі</button>${tags.map(t => `<button class="chip ${UI.f.noteTag === t ? 'on' : ''}" data-act="note-tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
-  ${list.length ? `<div class="grid-cards">${list.map(n => `<article class="card">
+  ${list.length ? `<div class="grid-cards notes-gallery">${list.map(n => `<article class="card note-card ${n.pinned ? 'pinned' : ''}">
+    <span class="note-eyebrow">${n.pinned ? 'ЗАКРІПЛЕНО' : 'НОТАТКА'} / ${fmtDate(n.updatedAt)}</span>
     <div class="card-top"><h3>${esc(n.title || 'Без заголовка')}</h3><button class="btn sm ghost icon" data-act="pin-note" data-id="${n.id}" aria-pressed="${n.pinned}" title="${n.pinned ? 'Відкріпити' : 'Закріпити'}" style="${n.pinned ? '' : 'opacity:.45'}">📌</button></div>
     ${n.body ? `<div class="pre small clamp">${esc(n.body)}</div>` : ''}
     ${n.tags.length ? `<div class="chips">${n.tags.map(t => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : ''}

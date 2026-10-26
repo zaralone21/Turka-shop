@@ -12,7 +12,7 @@ function donut(d, b, cats) {
   const top = rows.slice(0, 5); const rest = rows.slice(5).reduce((s, x) => s + x.v, 0); if (rest) top.push({ name: 'Інше', v: rest });
   const R = 40, C = 2 * Math.PI * R; let off = 0;
   const arcs = top.map((x, i) => { const len = x.v / total * C; const a = `<circle class="seg-arc" r="${R}" cx="50" cy="50" stroke="var(--chart-${i + 1})" stroke-dasharray="${Math.max(len - 1.2, .1).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"></circle>`; off += len; return a; }).join('');
-  return `<section class="panel"><div class="panel-head"><h2>Витрати по категоріях</h2><span class="small muted">потрібно на відкриття</span></div>
+  return `<section class="panel finance-breakdown"><div class="panel-head"><h2>Структура витрат</h2><span class="small muted">потрібно на відкриття</span></div>
     <div class="donut-wrap"><svg class="donut" viewBox="0 0 100 100" role="img" aria-label="Розподіл витрат по категоріях"><circle r="${R}" cx="50" cy="50" stroke="var(--surface-2)"></circle>${arcs}</svg>
     <ul class="legend">${top.map((x, i) => `<li><i style="background:var(--chart-${i + 1})"></i><span>${esc(x.name)}</span><b>${Math.round(x.v / total * 100)}%</b></li>`).join('')}</ul></div></section>`;
 }
@@ -45,19 +45,18 @@ VIEWS.budget = () => {
   const free = b.total === null ? ['—', '', 'Залишок'] : b.free >= 0 ? [fmtMoney(b.free), 'good', 'Залишок'] : [fmtMoney(-b.free), 'bad', 'Перевищення'];
   return `
   <div class="page-head"><div><p>Скільки грошей потрібно, щоб відкрити магазин, і скільки вже сплачено.</p></div><div class="row">${moreMenu([['budget-cats', 'Категорії витрат']])}<button class="btn primary hide-m" data-act="add-expense">+ Додати витрату</button></div></div>
-  <section class="panel fin-total">
+  <div class="finance-overview ${b.needed ? '' : 'no-breakdown'}"><section class="panel fin-total">
     <div class="big-total"><span class="lead">${svg('budget')}</span><div style="flex:1;min-width:0"><span class="small muted">Загальний бюджет відкриття</span><div class="v">${b.total === null ? 'Не задано' : fmtMoney(b.total)}</div></div></div>
     ${pctPaid !== null ? `<div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctPaid}" aria-label="Сплачено від бюджету"><i class="${b.paid > b.total ? 'bad' : ''}" style="width:${pctPaid}%"></i></div><div class="meter-row"><span>Заплановано ${fmtMoney(b.planned)} · потрібно на відкриття ${fmtMoney(b.needed)}${b.deposit.needed ? `, з них депозит ${fmtMoney(b.deposit.needed)}` : ''}</span><span class="num">${pctPaid}%</span></div>` : ''}
     <details class="budget-edit" ${b.total === null ? 'open' : ''}><summary class="btn sm soft">${b.total === null ? 'Задати бюджет' : 'Змінити бюджет'}</summary>
     <form class="row" data-form="total-budget" style="align-items:flex-end;margin-top:10px">
     <label class="field" style="flex:1 1 220px"><span class="lbl">Загальний бюджет на відкриття, ₴</span><input class="input num" id="total-budget" name="total" inputmode="decimal" placeholder="Наприклад, 400000" value="${b.total === null ? '' : esc(fmtNum(b.total))}"><span class="hint">Сума, яку ви готові вкласти. Задаєте самостійно.</span></label>
-    <button class="btn primary" type="submit">Зберегти бюджет</button></form></details></section>
+    <button class="btn primary" type="submit">Зберегти бюджет</button></form></details></section>${donut(d, b, cats)}</div>
   <section class="stat-cards tiles">
     <div class="tile"><span class="k">Сплачено</span><span class="v">${fmtMoney(b.paid)}</span></div>
     <div class="tile"><span class="k">Ще потрібно</span><span class="v">${fmtMoney(b.toPay)}</span></div>
     <div class="tile ${free[1]}"><span class="k">${free[2]}</span><span class="v">${free[0]}</span></div>
   </section>
-  ${donut(d, b, cats)}
   ${(() => { const m = monthlySummary(d); return `<div class="callout info row" style="justify-content:space-between"><span>Щомісячні витрати після відкриття: <b>${fmtMoney(m.total)}</b> на місяць. Вони рахуються окремо й у бюджет відкриття не входять.</span><button class="btn sm" data-nav="monthly">Переглянути</button></div>`; })()}
   <details class="explain"><summary>Як рахується бюджет</summary><div class="formula"><span><b>Потрібно на відкриття</b> = сплачено + залишилося сплатити за планом. Якщо за статтею сплатили більше, ніж планували, враховується фактична сума, а не обидві. Так жодна витрата не рахується двічі.</span>
     <span><b>Поворотний депозит</b> (${fmtMoney(b.deposit.needed)}) входить у потрібну суму, бо гроші треба мати на руках, але показаний окремо: його повернуть. Безповоротні витрати: ${fmtMoney(b.nonRefundable)}.</span>
