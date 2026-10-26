@@ -5,6 +5,7 @@ import { byText, daysFromToday, esc, fmtDate, fmtKyiv, fmtMoney, plural } from '
 import { D, UI, VIEWS, emptyState, ext, igLink, statusPill } from '../shared.js';
 import { svg } from '../shell.js';
 import { productTable } from './products.js';
+import { minOrderLabel, minOrderOf } from '../../core/cart.js';
 import { purchasePill } from './purchases.js';
 import { Calc } from '../../core/calc.js';
 import { fireAt } from '../../core/reminders.js';
@@ -57,8 +58,8 @@ export function supplierDetail(s) {
       ${row('Інфо перевірено', fmtDate(s.checkedAt))}
     </dl>${!s.instagram && !s.website && !s.phone && !s.messenger && !s.contactPerson && !s.city ? '<p class="muted small">Контакти ще не додані.</p>' : ''}</section>
     <section class="panel"><h2 style="margin-bottom:10px">Умови</h2><dl class="kv">
-      ${row('Мінімальне замовлення', esc(s.minOrder))}${row('Оплата', esc(s.paymentTerms))}${row('Доставка', esc(s.deliveryTerms))}${row('Обмін браку', esc(s.defectTerms))}
-    </dl>${!s.minOrder && !s.paymentTerms && !s.deliveryTerms && !s.defectTerms ? '<p class="muted small">Умови ще не записані.</p>' : ''}
+      ${row('Мінімальне замовлення', esc(s.minOrder))}${minOrderOf(s) ? row('Мін. замовлення числами', esc(minOrderLabel(minOrderOf(s)))) : ''}${row('Оплата', esc(s.paymentTerms))}${row('Доставка', esc(s.deliveryTerms))}${row('Обмін браку', esc(s.defectTerms))}
+    </dl>${!s.minOrder && !minOrderOf(s) && !s.paymentTerms && !s.deliveryTerms && !s.defectTerms ? '<p class="muted small">Умови ще не записані.</p>' : ''}
     ${s.notes ? `<h3 style="margin:14px 0 6px">Нотатки</h3><div class="pre small">${esc(s.notes)}</div>` : ''}</section>
   </div>
   <section class="panel">

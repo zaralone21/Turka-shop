@@ -10,7 +10,7 @@ export function createRepo() {
   let changeLog = [];
   const clone = value => JSON.parse(JSON.stringify(value));
   function remember(name, before, after, fields) {
-    if (!before || !after || name === 'chats') return;
+    if (!before || !after || name === 'chats' || name === 'cart') return;
     const keys = Object.keys(fields).filter(k => !['id', 'createdAt', 'updatedAt', 'photos', 'files'].includes(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
     if (!keys.length) return;
     const previous = {}, next = {};
@@ -79,6 +79,12 @@ export function createRepo() {
     async update(name, id, fields) { await mutate(d => { const i = d[name].findIndex(x => x.id === id); if (i >= 0) { const before = d[name][i]; const after = Schema.normalizeRecord(name, { ...before, ...fields, updatedAt: nowISO() }); remember(name, before, after, fields); d[name][i] = after; } }); },
     /** Кілька змін однієї колекції одним збереженням: [{id, fields}]. */
     async updateMany(name, changes) { const t = nowISO(); await mutate(d => { for (const c of changes) { const i = d[name].findIndex(x => x.id === c.id); if (i >= 0) { const before = d[name][i]; const after = Schema.normalizeRecord(name, { ...before, ...c.fields, updatedAt: t }); remember(name, before, after, c.fields); d[name][i] = after; } } }); },
+    /** Кошик → закупівля одним збереженням: нова закупівля з'являється разом із прибиранням перенесених позицій. */
+    async transferCart(purchase, cartIds) {
+      const rec = Schema.normalizeRecord('purchases', purchase); const drop = new Set(cartIds);
+      await mutate(d => { if (d.purchases.some(x => x.id === rec.id)) return; d.purchases.push(rec); d.cart = d.cart.filter(x => !drop.has(x.id)); });
+      return rec;
+    },
     get changes() { return clone(changeLog); },
     async undoChange(id) {
       const item = changeLog.find(x => x.id === id);

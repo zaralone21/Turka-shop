@@ -4,6 +4,7 @@ import { Schema } from '../../core/schema.js';
 import { byText, daysFromToday, esc, fmtDate, fmtMoney } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, supplierName } from '../shared.js';
 import { svg } from '../shell.js';
+import { cartButton } from './cart.js';
 
 /* ---------- Закупівлі: що заплановано й що очікується ---------- */
 const STATUS_PILL = { planned: '', ordered: 'accent', awaiting: 'accent', received: 'ok', cancelled: '' };
@@ -11,7 +12,7 @@ export const purchasePill = s => `<span class="pill ${STATUS_PILL[s]}">${Schema.
 
 VIEWS.purchases = () => {
   const d = D(); const sum = Calc.purchases(d);
-  const head = `<div class="page-head"><p>Заплановані й очікувані закупівлі товару. Суми рахуються з позицій і доставки.</p><button class="btn primary hide-m" data-act="add-purchase">+ Нова закупівля</button></div>`;
+  const head = `<div class="page-head"><p>Заплановані й очікувані закупівлі товару. Суми рахуються з позицій і доставки.</p><div class="row">${cartButton()}<button class="btn primary hide-m" data-act="add-purchase">+ Нова закупівля</button></div></div>`;
   if (!d.purchases.length) return head + emptyState('Запишіть першу закупівлю: у кого, що й скільки береться, коли чекати доставку.', 'add-purchase', 'Запланувати закупівлю');
   const order = { awaiting: 0, ordered: 1, planned: 2, received: 3, cancelled: 4 };
   const list = d.purchases.filter(p => !UI.f.purStatus || p.status === UI.f.purStatus)

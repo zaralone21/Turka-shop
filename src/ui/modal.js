@@ -5,7 +5,7 @@ import { svg } from './shell.js';
 /* =====================================================================
    7. МОДАЛЬНІ ВІКНА ТА ФОРМИ
    ===================================================================== */
-export let modalEl = null, lastFocus = null;
+export let modalEl = null, lastFocus = null, modalTap = { t: -1e9, x: 0, y: 0 };
 let onCloseCb = null, lockY = null, focusKey = [];
 /* Поки відкрите вікно, фонова сторінка не прокручується; після закриття повертаємось на те саме місце. */
 function lockScroll() {
@@ -25,9 +25,12 @@ function unlockScroll() {
   const el = lastFocus?.isConnected ? lastFocus : focusKey.map(k => root.querySelector(k)).find(Boolean);
   if (el) el.focus({ preventScroll: true });
 }
+/** Чи це другий дотик подвійного натискання по кнопці щойно закритого вікна (у тому самому місці). */
+export const isGhostTap = e => !modalEl && performance.now() - modalTap.t < 450 && Math.abs(e.clientX - modalTap.x) < 24 && Math.abs(e.clientY - modalTap.y) < 24;
 /** Закриває вікно; якщо при відкритті передали onClose, викликає його (наприклад, повернення до перегляду). */
 export function closeModal() {
   if (!modalEl) return; modalEl.remove(); modalEl = null;
+  if (typeof KeyboardEvent !== 'undefined' && window.event instanceof KeyboardEvent) modalTap = { t: -1e9, x: 0, y: 0 }; // закрито клавішею, а не дотиком
   const cb = onCloseCb; onCloseCb = null;
   // Якщо після закриття відкриється інше вікно (повернення до перегляду), фон лишається заблокованим.
   if (cb) setTimeout(() => { cb(); if (!modalEl) unlockScroll(); }); else unlockScroll();
@@ -55,6 +58,7 @@ export function openModal({ title, body, foot, narrow, wide, onMount, onClose })
   onCloseCb = null; closeModal(); onCloseCb = onClose || null;
   modalEl = document.createElement('div'); modalEl.className = 'modal-back';
   modalEl.innerHTML = `<div class="modal ${narrow ? 'narrow' : wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-h"><h2>${esc(title)}</h2><button class="btn ghost icon" data-close aria-label="Закрити">✕</button></div>${body}${foot || ''}</div>`;
+  modalEl.addEventListener('pointerdown', e => { modalTap = { t: performance.now(), x: e.clientX, y: e.clientY }; });
   modalEl.addEventListener('mousedown', e => { if (e.target === modalEl) closeModal(); });
   modalEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModal(); });
   lockScroll();
