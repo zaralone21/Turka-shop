@@ -6,7 +6,7 @@ import { expenseOrigins } from '../core/opening.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
-import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, productView, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, productView, quickRetail, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
@@ -43,6 +43,8 @@ export const ACTIONS = {
   'note-tag': el => { UI.f.noteTag = el.dataset.tag; render(); },
   'prod-cat': el => { UI.f.prodCat = el.dataset.v; UI.f.prodSub = ''; render(); },
   'prod-sub': el => { UI.f.prodSub = el.dataset.v; render(); },
+  'prod-quick': el => { UI.f.prodQuick = el.dataset.v; render(); },
+  'quick-retail': el => quickRetail(el.dataset.id),
   'sup-cat': el => { UI.f.supCat = el.dataset.v; render(); },
   'task-prio': el => { UI.f.taskPrio = el.dataset.v; render(); },
   'pur-status': el => { UI.f.purStatus = el.dataset.v; render(); },
@@ -116,7 +118,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalEl) closeModal();
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[data-act]')) { e.preventDefault(); ACTIONS[e.target.dataset.act](e.target); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[data-act], [role="button"][data-act]') && !e.repeat) { e.preventDefault(); ACTIONS[e.target.dataset.act]?.(e.target); }
 });
 document.addEventListener('change', async e => {
   const el = e.target; if (modalEl && modalEl.contains(el)) return;

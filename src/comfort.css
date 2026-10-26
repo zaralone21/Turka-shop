@@ -640,3 +640,82 @@ table.t td { padding: 16px 15px; }
 .product-gallery .catalog-profit b { font-size: clamp(10.5px, 6cqi, 15px); }
 .product-gallery .catalog-prices .k, .product-gallery .catalog-profit .k { font-size: clamp(9px, 4.6cqi, 11px); }
 @media (max-width: 360px) { .product-gallery .catalog-profit { padding: 6px; gap: 4px; } .product-gallery .catalog-profit b { font-size: clamp(9.5px, 6cqi, 15px); } }
+
+/* ---------- Каталог: панель, швидкі фільтри, список ---------- */
+.sort-view { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.sort-view .view-seg button { padding: 7px 12px; min-height: 22px; }
+.quick-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; margin: 4px 0 12px; }
+.quick-row .chips { margin: 0; }
+.quick-row .found { margin: 0; font-size: .85rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.catalog-card[role='button'] { cursor: pointer; }
+.product-gallery button.catalog-profit.empty-metrics { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; height: 56px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--border-strong, var(--border)); color: var(--primary); font-weight: 600; font-size: 12.5px; cursor: pointer; text-align: center; }
+.product-gallery button.catalog-profit.empty-metrics:hover { background: var(--surface-2); border-style: solid; }
+.product-gallery button.catalog-profit.empty-metrics:focus-visible, .pl-quick:focus-visible, .pl-open:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 900px) { .product-gallery button.catalog-profit.empty-metrics { height: 48px; font-size: 11px; padding: 6px; } }
+
+.prod-list { --pl-cols: 44px minmax(0, 2.4fr) repeat(4, minmax(84px, 1fr)); display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.pl-head { display: grid; grid-template-columns: var(--pl-cols) 168px; gap: 12px; padding: 9px 14px; font-size: 11.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.pl-head > span:nth-child(n+3) { text-align: right; }
+.pl-row { display: grid; grid-template-columns: minmax(0, 1fr) 168px; align-items: center; gap: 12px; padding-right: 14px; border-bottom: 1px solid var(--border); }
+.pl-row:last-child { border-bottom: 0; }
+.pl-row:hover { background: var(--surface-2); }
+.pl-open { display: grid; grid-template-columns: var(--pl-cols); gap: 12px; align-items: center; padding: 8px 0 8px 14px; cursor: pointer; min-width: 0; border-radius: 6px; }
+.pl-photo { width: 44px; height: 44px; border-radius: 8px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--text-muted); }
+.pl-photo img { width: 100%; height: 100%; object-fit: contain; }
+:root[data-theme='dark'] .pl-photo img { background: #fff; }
+.pl-photo svg { width: 20px; height: 20px; }
+.pl-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pl-name b { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-sup { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-v { display: flex; flex-direction: column; align-items: flex-end; text-align: right; min-width: 0; font-variant-numeric: tabular-nums; }
+.pl-v .k { display: none; }
+.pl-v b { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.pl-v .none { font-style: normal; font-weight: 500; font-size: 12.5px; color: var(--text-muted); }
+.pl-note { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.pl-row.pos .pl-diff b, .pl-row.pos .pl-margin b { color: var(--ok); }
+.pl-row.neg .pl-diff b, .pl-row.neg .pl-margin b { color: var(--danger); }
+.pl-quick { justify-self: end; white-space: nowrap; }
+.pl-main { display: contents; }
+@media (max-width: 900px) {
+  .pl-head { display: none; }
+  .pl-row { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 0 10px; }
+  .pl-open { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 10px 12px 8px; }
+  .pl-main { display: flex; align-items: center; gap: 10px; grid-column: 1 / -1; min-width: 0; }
+  .pl-photo { flex: none; }
+  .pl-name b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pl-v { align-items: flex-start; text-align: left; }
+  .pl-v .k { display: block; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .pl-v b { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .pl-quick { justify-self: stretch; margin: 0 12px; }
+}
+
+/* ---------- Вікна: фон не прокручується, дії внизу завжди видно ---------- */
+html.modal-open { overflow: hidden; }
+.modal { max-height: calc(100dvh - 48px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+.modal > .modal-h, .modal > .modal-f { flex: none; }
+.modal > .modal-b { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* ---------- Перегляд товару ---------- */
+.product-view { grid-template-columns: minmax(0, 296px) minmax(0, 1fr); }
+.pv-sec { display: flex; flex-direction: column; gap: 8px; }
+.pv-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.pv-sec-h .pv-sub { margin: 0; }
+.pv-link { font-size: .9rem; font-weight: 600; align-self: flex-start; }
+.pv-missing { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; font-size: .88rem; color: var(--text-muted); }
+.pv-comment { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); }
+.pv-comment .pv-sub { margin: 0; }
+.pv-comment p { margin: 0; font-size: .9rem; }
+.product-view > .pv-upd { grid-column: 1 / -1; }
+.pv-ctx { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .product-view { grid-template-columns: minmax(0, 1fr); }
+  .pv-main, .pv-nophoto { aspect-ratio: 5 / 3; }
+}
+
+/* ---------- Швидке введення роздрібу ---------- */
+.qr-ctx { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; overflow-wrap: anywhere; }
+.qr-ctx > b { font-size: 1rem; }
+.qr-msg { font-size: .86rem; line-height: 1.45; min-height: 1.2em; }
+.qr-msg.warn { padding: 8px 10px; border-radius: 8px; background: var(--danger-soft); color: color-mix(in srgb, var(--danger) 85%, var(--text)); }
+.qr-msg.bad { color: var(--danger); }
+.qr-msg.ok b { color: var(--ok); }

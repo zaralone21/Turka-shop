@@ -110,3 +110,42 @@ describe('розділи товарів', () => {
     expect(sortProducts(d.products, 'retail-asc').slice(-1)[0].retailPrice).toBeNull();
   });
 });
+
+describe('сортування товарів', () => {
+  const P = [
+    { id: 'pos', name: 'Береза', purchasePrice: 100, retailPrice: 150, createdAt: '2026-01-03', updatedAt: '2026-02-01' },
+    { id: 'neg', name: 'Айва', purchasePrice: 10, retailPrice: 5, createdAt: '2026-01-05', updatedAt: '2026-01-05' },
+    { id: 'zero', name: 'Вишня', purchasePrice: 20, retailPrice: 20, createdAt: '2026-01-01', updatedAt: '2026-03-01' },
+    { id: 'none', name: 'Груша', purchasePrice: 30, retailPrice: null, createdAt: '2026-01-04' },
+    { id: 'pack', name: 'Дуб', priceType: 'pack', purchasePrice: 120, packQty: 12, retailPrice: 25, createdAt: '2026-01-02' },
+    { id: 'empty', name: 'Ясен', purchasePrice: null, retailPrice: null },
+  ];
+  const ids = k => sortProducts(P, k).map(p => p.id);
+  it('назва в обох напрямках', () => {
+    expect(ids('name')).toEqual(['neg', 'pos', 'zero', 'none', 'pack', 'empty']);
+    expect(ids('name-desc')).toEqual(['empty', 'pack', 'none', 'zero', 'pos', 'neg']);
+  });
+  it('закупівля порівнює ціну одиниці, відсутні в кінці', () => {
+    expect(ids('cost-asc')).toEqual(['neg', 'pack', 'zero', 'none', 'pos', 'empty']);
+    expect(ids('cost-desc')).toEqual(['pos', 'none', 'zero', 'neg', 'pack', 'empty']);
+  });
+  it('роздріб числами, відсутні в кінці в обох напрямках', () => {
+    expect(ids('retail-asc')).toEqual(['neg', 'zero', 'pack', 'pos', 'none', 'empty']);
+    expect(ids('retail-desc')).toEqual(['pos', 'pack', 'zero', 'neg', 'none', 'empty']);
+  });
+  it('різниця й маржа: нерозраховані не вважаються нулем', () => {
+    expect(ids('diff-desc')).toEqual(['pos', 'pack', 'zero', 'neg', 'none', 'empty']);
+    expect(ids('diff-asc')).toEqual(['neg', 'zero', 'pack', 'pos', 'none', 'empty']);
+    expect(ids('margin-desc')).toEqual(['pack', 'pos', 'zero', 'neg', 'none', 'empty']);
+    expect(ids('margin-asc')).toEqual(['neg', 'zero', 'pos', 'pack', 'none', 'empty']);
+  });
+  it('нещодавно додані й оновлені', () => {
+    expect(ids('new')).toEqual(['neg', 'none', 'pos', 'pack', 'zero', 'empty']);
+    expect(ids('updated')).toEqual(['zero', 'pos', 'neg', 'none', 'pack', 'empty']);
+  });
+  it('стабільний порядок для однакових значень', () => {
+    const same = [{ id: 'b', name: 'Х', retailPrice: 10 }, { id: 'a', name: 'Х', retailPrice: 10 }, { id: 'c', name: 'А', retailPrice: 10 }];
+    expect(sortProducts(same, 'retail-desc').map(p => p.id)).toEqual(['c', 'a', 'b']);
+    expect(sortProducts([...same].reverse(), 'retail-desc').map(p => p.id)).toEqual(['c', 'a', 'b']);
+  });
+});

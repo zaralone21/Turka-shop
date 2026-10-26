@@ -160,20 +160,32 @@ export function sectionOrder(sections, products) {
 }
 
 export const SORTS = [
-  ['name', 'Назва А–Я'], ['retail-asc', 'Роздріб: дешевші'], ['retail-desc', 'Роздріб: дорожчі'],
-  ['cost-asc', 'Закупівля: дешевші'], ['margin-desc', 'Маржа: більша'], ['new', 'Нові спочатку'],
+  ['name', 'Назва: А–Я'], ['name-desc', 'Назва: Я–А'],
+  ['cost-asc', 'Закупівля: від дешевих'], ['cost-desc', 'Закупівля: від дорогих'],
+  ['retail-asc', 'Роздріб: від дешевих'], ['retail-desc', 'Роздріб: від дорогих'],
+  ['diff-desc', 'Різниця / од.: від більшої'], ['diff-asc', 'Різниця / од.: від меншої'],
+  ['margin-desc', 'Маржа: від більшої'], ['margin-asc', 'Маржа: від меншої'],
+  ['new', 'Нещодавно додані'], ['updated', 'Нещодавно оновлені'],
 ];
-const last = v => (isNum(v) ? v : null);
+const num = v => (isNum(v) ? v : null);
+const time = v => { const t = v ? Date.parse(v) : NaN; return Number.isFinite(t) ? t : null; };
+/** Порівняння з відсутніми значеннями завжди в кінці, незалежно від напрямку. */
 const cmpNum = (a, b, dir) => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : (a - b) * dir);
+const metric = {
+  cost: p => num(Calc.unitCost(p)),
+  retail: p => num(p.retailPrice),
+  diff: p => num(Calc.diff(Calc.unitCost(p), p.retailPrice)),
+  margin: p => num(Calc.margin(Calc.unitCost(p), p.retailPrice)),
+  new: p => time(p.createdAt),
+  updated: p => time(p.updatedAt || p.createdAt),
+};
+const nm = p => String(p.name || '');
+const tie = (a, b) => byText(nm(a), nm(b)) || String(a.id).localeCompare(String(b.id));
 export function sortProducts(list, key) {
-  const by = {
-    'retail-asc': (a, b) => cmpNum(last(a.retailPrice), last(b.retailPrice), 1),
-    'retail-desc': (a, b) => cmpNum(last(a.retailPrice), last(b.retailPrice), -1),
-    'cost-asc': (a, b) => cmpNum(last(Calc.unitCost(a)), last(Calc.unitCost(b)), 1),
-    'margin-desc': (a, b) => cmpNum(last(Calc.margin(Calc.unitCost(a), a.retailPrice)), last(Calc.margin(Calc.unitCost(b), b.retailPrice)), -1),
-    'new': (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)),
-  }[key];
-  return [...list].sort((a, b) => (by && by(a, b)) || byText(a.name, b.name));
+  if (key === 'name-desc') return [...list].sort((a, b) => byText(nm(b), nm(a)) || tie(a, b));
+  const [m, d] = key === 'new' || key === 'updated' ? [key, 'desc'] : String(key).split('-');
+  const f = metric[m], dir = d === 'desc' ? -1 : 1;
+  return [...list].sort((a, b) => (f ? cmpNum(f(a), f(b), dir) : 0) || tie(a, b));
 }
 
 /** Групи для показу: [{name, items, subs: [{name, items}]}]. Порожні групи пропускаються. */
