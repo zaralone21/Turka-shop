@@ -4,6 +4,7 @@ import { byText, esc, fmtMoney, fmtNum, isNum, plural, signedMoney, signedPct } 
 import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, emptyState, supplierName, moreMenu } from '../shared.js';
 import { svg } from '../shell.js';
+import { cartButton, cartControl } from './cart.js';
 
 /* ---------- 3. Товари ---------- */
 export const DIFF_HINT = 'Роздрібна ціна мінус закупівельна ціна за одиницю, без урахування інших витрат';
@@ -25,7 +26,7 @@ function productCards(list) {
       <span class="catalog-prices"><span><span class="k">Закупівля / од.</span>${isNum(cost) ? `<b>${fmtMoney(cost)}</b>` : '<b class="retail-none">Не задано</b>'}</span><span><span class="k">Роздріб</span>${isNum(p.retailPrice) ? `<b class="retail">${fmtMoney(p.retailPrice)}</b>` : '<b class="retail-none">Не задано</b>'}</span></span>
       ${isNum(d) ? `<span class="catalog-profit ${tone}" title="${DIFF_HINT}"><span><span class="k">Різниця / од.</span><b>${signedMoney(d)}</b></span><span><span class="k">Маржа</span><b>${signedPct(mg)}</b></span></span>`
         : !isNum(p.retailPrice) ? quickBtn(p, 'catalog-profit empty-metrics', 'Вкажіть роздрібну ціну')
-        : '<span class="catalog-profit empty-metrics">Вкажіть закупівельну ціну</span>'}</span></article>`;
+        : '<span class="catalog-profit empty-metrics">Вкажіть закупівельну ціну</span>'}<span class="catalog-cart" data-act="cart-noop">${cartControl(p)}</span></span></article>`;
   }).join('')}</div>`;
 }
 function productList(list) {
@@ -38,7 +39,7 @@ function productList(list) {
       <span class="pl-v pl-retail"><span class="k">Роздріб</span><b>${isNum(p.retailPrice) ? fmtMoney(p.retailPrice) : '<i class="none">Не задано</i>'}</b></span>
       <span class="pl-v pl-diff" title="${DIFF_HINT}"><span class="k">Різниця / од.</span><b>${isNum(d) ? signedMoney(d) : '—'}</b></span>
       <span class="pl-v pl-margin"><span class="k">Маржа</span><b>${isNum(mg) ? signedPct(mg) : '—'}</b></span></div>
-      ${quickBtn(p, 'btn sm pl-quick' + (isNum(p.retailPrice) ? ' ghost' : ''), isNum(p.retailPrice) ? 'Змінити роздріб' : 'Вкажіть роздрібну ціну')}</article>`;
+      <div class="pl-acts" data-act="cart-noop">${cartControl(p)}${quickBtn(p, 'btn sm pl-quick' + (isNum(p.retailPrice) ? ' ghost' : ''), isNum(p.retailPrice) ? 'Змінити роздріб' : 'Вкажіть роздрібну ціну')}</div></article>`;
   }).join('')}</div>`;
 }
 export function productTable(list) {
@@ -61,7 +62,7 @@ VIEWS.products = () => {
   if (!subs.includes(UI.f.prodSub) && UI.f.prodSub !== NO_SECTION) UI.f.prodSub = '';
   const inSub = UI.f.prodSub === NO_SECTION ? inCat.filter(p => !p.subcategory) : UI.f.prodSub ? inCat.filter(p => p.subcategory === UI.f.prodSub) : inCat;
   const list = QUICK[UI.f.prodQuick] ? inSub.filter(QUICK[UI.f.prodQuick]) : inSub;
-  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row">${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
+  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row">${cartButton()}${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
   if (!d.products.length) return head + emptyState('Додайте товар з ціною закупівлі та плановою роздрібною ціною, і націнка з маржею порахуються автоматично.', 'add-product', 'Додати перший товар') + FORMULAS;
   const plan = planRegroup(d), toMove = plan.products.length + plan.suppliers.length;
   const noCat = base.filter(p => !p.category).length;

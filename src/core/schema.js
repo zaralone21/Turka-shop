@@ -1,5 +1,6 @@
 import { REMINDER_STATUSES, REPEATS, fireAt } from './reminders.js';
 import { FITOUT_STATUSES, MONTHLY_KINDS, PREMISES_STATUSES } from './opening.js';
+import { normalizeCartRecord } from './cart.js';
 import { SECTIONS_REV, mergeDefaultSections, normalizeSections } from './sections.js';
 import { APP_ID, SCHEMA_VERSION, isNum, nowISO, parseNum, splitList, uid } from './utils.js';
 
@@ -21,10 +22,10 @@ export const Schema = (() => {
   const LINK_TYPES = { task: 'Завдання', supplier: 'Постачальник', purchase: 'Закупівля', premises: 'Приміщення', fitout: 'Облаштування', monthly: 'Щомісячна витрата' };
   /** Колекція записів для кожного типу прив'язки нагадування. */
   const LINK_COLLECTION = { task: 'tasks', supplier: 'suppliers', purchase: 'purchases', premises: 'premises', fitout: 'fitout', monthly: 'monthly' };
-  const COLLECTIONS = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders', 'premises', 'fitout', 'monthly', 'chats'];
+  const COLLECTIONS = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders', 'premises', 'fitout', 'monthly', 'chats', 'cart'];
   /* Колекції, що є частиною робочих даних магазину (чати AI сюди не входять). */
   const DATA_COLLECTIONS = COLLECTIONS.filter(k => k !== 'chats');
-  const LABELS = { suppliers: 'постачальники', products: 'товари', notes: 'нотатки', tasks: 'завдання', expenses: 'витрати', purchases: 'закупівлі', reminders: 'нагадування', premises: 'приміщення', fitout: 'облаштування', monthly: 'щомісячні витрати', chats: 'чати AI' };
+  const LABELS = { suppliers: 'постачальники', products: 'товари', notes: 'нотатки', tasks: 'завдання', expenses: 'витрати', purchases: 'закупівлі', reminders: 'нагадування', premises: 'приміщення', fitout: 'облаштування', monthly: 'щомісячні витрати', chats: 'чати AI', cart: 'кошик закупівель' };
 
   function empty() {
     const t = nowISO();
@@ -43,7 +44,7 @@ export const Schema = (() => {
         storeOpened: false,
         fitoutCategories: [],
       },
-      suppliers: [], products: [], notes: [], tasks: [], expenses: [], purchases: [], reminders: [], premises: [], fitout: [], monthly: [], chats: [],
+      suppliers: [], products: [], notes: [], tasks: [], expenses: [], purchases: [], reminders: [], premises: [], fitout: [], monthly: [], chats: [], cart: [],
     };
   }
 
@@ -106,11 +107,12 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
       reminderId: idOrNull(x.reminderId), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     purchases: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), supplierId: x.supplierId ? str(x.supplierId) : null, status: pick(x.status, PURCHASE_STATUSES, 'planned'), expectedDate: date(x.expectedDate),
       firstPurchase: !!x.firstPurchase,
-      items: Array.isArray(x.items) ? x.items.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), productId: i.productId ? str(i.productId) : null, name: str(i.name), qty: numOrNull(i.qty), unitPrice: numOrNull(i.unitPrice), retailPrice: numOrNull(i.retailPrice) })).filter(i => i.name || i.productId) : [],
+      items: Array.isArray(x.items) ? x.items.filter(i => i && typeof i === 'object').map(i => ({ ...i, id: str(i.id) || uid(), productId: i.productId ? str(i.productId) : null, name: str(i.name), qty: numOrNull(i.qty), unitPrice: numOrNull(i.unitPrice), retailPrice: numOrNull(i.retailPrice) })).filter(i => i.name || i.productId) : [],
       deliveryCost: numOrNull(x.deliveryCost), expenseId: x.expenseId ? str(x.expenseId) : null, comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     reminders: x => { const r = { ...x, id: str(x.id) || uid(), title: str(x.title), note: str(x.note), date: date(x.date), time: /^\d{2}:\d{2}$/.test(x.time || '') ? x.time : '09:00', repeat: pick(x.repeat, REPEATS, 'none'), status: pick(x.status, REMINDER_STATUSES, 'planned'),
       snoozedUntil: x.snoozedUntil && !isNaN(new Date(x.snoozedUntil)) ? x.snoozedUntil : null, link: x.link && LINK_TYPES[x.link.type] && x.link.id ? { type: x.link.type, id: str(x.link.id) } : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) };
       r.fireAt = fireAt(r); return r; },
+    cart: x => normalizeCartRecord({ ...x, id: str(x.id) || uid(), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     chats: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title) || 'Розмова', messages: Array.isArray(x.messages) ? x.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant')) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
   };
 

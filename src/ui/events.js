@@ -8,9 +8,10 @@ import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
 import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, productView, quickRetail, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { deletePhotos } from './photos.js';
+import { CART_ACTIONS, CART_CHANGE, bindCartRender } from './views/cart.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
-import { closeModal, confirmDialog, modalEl, openModal } from './modal.js';
+import { closeModal, isGhostTap, confirmDialog, modalEl, openModal } from './modal.js';
 import { D, NAV, UI, resolvePage, sectionOf, setUserName, toast } from './shared.js';
 import { FAB_ACTION, MORE_PAGES, render, svg } from './shell.js';
 import { setThemeMode, themeMode } from './theme.js';
@@ -45,6 +46,10 @@ export const ACTIONS = {
   'prod-sub': el => { UI.f.prodSub = el.dataset.v; render(); },
   'prod-quick': el => { UI.f.prodQuick = el.dataset.v; render(); },
   'quick-retail': el => quickRetail(el.dataset.id),
+  ...CART_ACTIONS,
+  'go-cart': () => { CART_ACTIONS['go-cart'](); go('cart'); },
+  'cart-back': () => { const y = UI.catalogScroll || 0; go('products'); if (y) window.scrollTo(0, y); },
+  'go-purchases': () => go('purchases'),
   'sup-cat': el => { UI.f.supCat = el.dataset.v; render(); },
   'task-prio': el => { UI.f.taskPrio = el.dataset.v; render(); },
   'pur-status': el => { UI.f.purStatus = el.dataset.v; render(); },
@@ -100,10 +105,12 @@ export function moreSheet() {
     } });
 }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
-Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render);
+Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render); bindCartRender(render);
 /* Розгорнутий чекліст лишається розгорнутим після перемальовування сторінки. */
 document.addEventListener('toggle', e => { const el = e.target; if (el.matches && el.matches('details[data-cl]')) UI.openCl[el.open ? 'add' : 'delete'](el.dataset.cl); }, true);
 document.addEventListener('click', e => {
+  // Другий дотик подвійного натискання по кнопці вікна не повинен спрацювати на сторінці під ним.
+  if (isGhostTap(e)) { e.preventDefault(); e.stopPropagation(); return; }
   const tab = e.target.closest('[data-tab]'); if (tab) { if (tab.dataset.tab === 'more') moreSheet(); else guardedGo(tab.dataset.tab); return; }
   const nav = e.target.closest('[data-nav]'); if (nav && !modalEl?.contains(nav)) { guardedGo(nav.dataset.nav); return; }
   const el = e.target.closest('[data-act]'); if (!el || (modalEl && modalEl.contains(el))) return;
@@ -118,10 +125,13 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalEl) closeModal();
+  // Enter у полях кошика зберігає значення (як вихід із поля).
+  if (e.key === 'Enter' && e.target.matches?.('input[data-act^="cart-"]')) { e.preventDefault(); e.target.blur(); return; }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card[data-act], [role="button"][data-act]') && !e.repeat) { e.preventDefault(); ACTIONS[e.target.dataset.act]?.(e.target); }
 });
 document.addEventListener('change', async e => {
   const el = e.target; if (modalEl && modalEl.contains(el)) return;
+  if (CART_CHANGE[el.dataset.act]) { CART_CHANGE[el.dataset.act](el); return; }
   if (el.dataset.filter && el.tagName === 'SELECT') { UI.f[el.dataset.filter] = el.value; render(); return; }
   const a = el.dataset.act;
   if (a === 'task-status') { await Repo.update('tasks', el.dataset.id, { status: el.value }); toast('Статус змінено'); }
