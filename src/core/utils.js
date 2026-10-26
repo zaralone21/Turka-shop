@@ -45,6 +45,9 @@ export const isNum = n => typeof n === 'number' && Number.isFinite(n);
 export const moneyFmt = new Intl.NumberFormat('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export function fmtMoney(n) { return isNum(n) ? moneyFmt.format(Math.round(n * 100) / 100) + ' ₴' : '—'; }
 export function fmtPct(n) { return isNum(n) ? n.toFixed(1).replace('.', ',') + '%' : '—'; }
+/** Сума/відсоток зі справжнім знаком мінус: колір не єдине позначення збитку. */
+export const signedMoney = n => isNum(n) ? (n < 0 ? '−' + fmtMoney(-n) : fmtMoney(n)) : '—';
+export const signedPct = n => isNum(n) ? (n < 0 ? '−' + fmtPct(-n) : fmtPct(n)) : '—';
 export function fmtNum(n) { return isNum(n) ? moneyFmt.format(n) : ''; }
 /** Дата ДД.ММ.РРРР із 'YYYY-MM-DD' або ISO-часу. */
 export function fmtDate(v, withTime) {

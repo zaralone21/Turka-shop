@@ -73,3 +73,25 @@ describe('беззбитковість', () => {
     expect(Object.keys(r.errors).sort()).toEqual(['avgCheck', 'days', 'extra', 'fixed', 'margin']);
   });
 });
+
+describe('різниця, маржа й націнка товару', () => {
+  it('збиток: закупівля 10, роздріб 5', () => {
+    expect(Calc.diff(10, 5)).toBe(-5);
+    expect(Calc.margin(10, 5)).toBe(-100);
+    expect(Calc.markup(10, 5)).toBe(-50);
+  });
+  it('нульові й відсутні ціни без ділення на нуль', () => {
+    expect(Calc.diff(10, null)).toBe(null);
+    expect(Calc.margin(10, null)).toBe(null);
+    expect(Calc.margin(10, 0)).toBe(null);
+    expect(Calc.markup(0, 5)).toBe(null);
+    expect(Calc.diff(10, 10)).toBe(0);
+    expect(Calc.margin(10, 10)).toBe(0);
+  });
+  it('упаковка: рахується від ціни одиниці', () => {
+    const cost = Calc.unitCost({ priceType: 'pack', purchasePrice: 360, packQty: 12 });
+    expect(cost).toBe(30);
+    expect(Calc.diff(cost, 65)).toBe(35);
+    expect(Calc.unitCost({ priceType: 'pack', purchasePrice: 360, packQty: 0 })).toBe(null);
+  });
+});

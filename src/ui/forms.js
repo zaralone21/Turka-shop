@@ -5,7 +5,7 @@ import { freeExpensesForPurchase, purchaseAmount, purchaseLink } from '../core/o
 import { planRegroup, sectionsToText, textToSections } from '../core/sections.js';
 import { once, syncExpensePlanned } from './budgetSync.js';
 import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core/reminders.js';
-import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, splitList, todayISO, uid, uniq } from '../core/utils.js';
+import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, signedMoney, signedPct, splitList, todayISO, uid, uniq } from '../core/utils.js';
 import { ACTIONS } from './events.js';
 import { F, closeModal, confirmDialog, dateField, formModal, g, moneyField, openModal, supplierOptions } from './modal.js';
 import { LOCAL_BYTES, MAX_PHOTOS, dataBytes, deletePhotos, hydratePhotos, photoImg, savePhoto } from './photos.js';
@@ -201,7 +201,7 @@ export function productView(id, start = 0) {
   const photos = p.photos || []; let i = Math.min(Math.max(0, start), Math.max(0, photos.length - 1));
   const none = '<span class="muted">Не задано</span>';
   const cost = Calc.unitCost(p), retail = p.retailPrice;
-  const profit = isNum(cost) && isNum(retail) ? retail - cost : null;
+  const profit = Calc.diff(cost, retail);
   const neg = v => isNum(v) && v < 0 ? ' class="bad"' : '';
   const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   const opt = (k, v) => v ? row(k, v) : '';
@@ -227,9 +227,9 @@ export function productView(id, start = 0) {
       ${p.priceType === 'pack' ? row('Одиниць в упаковці', isNum(p.packQty) ? fmtNum(p.packQty) : none) : ''}
       ${p.priceType === 'pack' ? row('Ціна одиниці', isNum(cost) ? fmtMoney(cost) : none) : ''}
       ${row('Роздрібна ціна', isNum(retail) ? fmtMoney(retail) : none)}
-      ${row('Заробіток з одиниці', isNum(profit) ? `<b${neg(profit)}>${fmtMoney(profit)}</b>` : none)}
-      ${row('Націнка', isNum(profit) ? `<span${neg(profit)}>${fmtPct(Calc.markup(cost, retail))}</span>` : none)}
-      ${row('Маржа', isNum(profit) ? `<span${neg(profit)}>${fmtPct(Calc.margin(cost, retail))}</span>` : none)}
+      ${row('Різниця / од.', isNum(profit) ? `<b${neg(profit)}>${signedMoney(profit)}</b><span class="pv-hint">Роздрібна ціна мінус закупівельна ціна за одиницю, без урахування інших витрат.</span>` : none)}
+      ${row('Маржа', isNum(Calc.margin(cost, retail)) ? `<span${neg(profit)}>${signedPct(Calc.margin(cost, retail))}</span>` : none)}
+      ${row('Націнка', isNum(Calc.markup(cost, retail)) ? `<span${neg(profit)}>${signedPct(Calc.markup(cost, retail))}</span>` : none)}
       ${row('Ціна актуальна на', p.priceDate ? fmtDate(p.priceDate) : none)}
     </dl>
     ${p.url || p.comment || extra.length ? `<dl class="kv pv-kv">
