@@ -7,10 +7,22 @@ import { KEYS, SCHEMA_VERSION, nowISO, uid } from './utils.js';
    Адаптер сховища підставляється ззовні: браузер, пам'ять або хмара (Supabase). */
 export function createRepo() {
   let adapter = null, data = null, listeners = [], retryTimer = null, saving = null, again = false;
+  let changeLog = [];
+  const clone = value => JSON.parse(JSON.stringify(value));
+  function remember(name, before, after, fields) {
+    if (!before || !after || name === 'chats') return;
+    const keys = Object.keys(fields).filter(k => !['id', 'createdAt', 'updatedAt', 'photos', 'files'].includes(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+    if (!keys.length) return;
+    const previous = {}, next = {};
+    for (const k of keys) { previous[k] = before[k] ?? null; next[k] = after[k] ?? null; }
+    changeLog.unshift({ id: uid(), collection: name, recordId: after.id, title: after.name || after.title || 'Запис', date: nowISO(), previous: clone(previous), next: clone(next), undone: false });
+    changeLog = changeLog.slice(0, 60);
+  }
   const status = { persistent: true, lastError: null, demo: false, loadError: null, cloud: false, sync: 'ok' };
 
   /** mode: 'real' | 'demo'; customAdapter — для хмари або тестів. */
   async function open(mode, customAdapter) {
+    changeLog = [];
     status.demo = mode === 'demo';
     status.cloud = !!(customAdapter && customAdapter.kind === 'cloud');
     status.loadError = null; status.lastError = null; status.sync = 'ok';
@@ -64,9 +76,17 @@ export function createRepo() {
     list: col,
     get: (name, id) => data[name].find(x => x.id === id) || null,
     async create(name, fields) { const t = nowISO(); const rec = Schema.normalizeRecord(name, { ...fields, id: fields.id || uid(), createdAt: t, updatedAt: t }); await mutate(d => d[name].push(rec)); return rec; },
-    async update(name, id, fields) { await mutate(d => { const i = d[name].findIndex(x => x.id === id); if (i >= 0) d[name][i] = Schema.normalizeRecord(name, { ...d[name][i], ...fields, updatedAt: nowISO() }); }); },
+    async update(name, id, fields) { await mutate(d => { const i = d[name].findIndex(x => x.id === id); if (i >= 0) { const before = d[name][i]; const after = Schema.normalizeRecord(name, { ...before, ...fields, updatedAt: nowISO() }); remember(name, before, after, fields); d[name][i] = after; } }); },
     /** Кілька змін однієї колекції одним збереженням: [{id, fields}]. */
-    async updateMany(name, changes) { const t = nowISO(); await mutate(d => { for (const c of changes) { const i = d[name].findIndex(x => x.id === c.id); if (i >= 0) d[name][i] = Schema.normalizeRecord(name, { ...d[name][i], ...c.fields, updatedAt: t }); } }); },
+    async updateMany(name, changes) { const t = nowISO(); await mutate(d => { for (const c of changes) { const i = d[name].findIndex(x => x.id === c.id); if (i >= 0) { const before = d[name][i]; const after = Schema.normalizeRecord(name, { ...before, ...c.fields, updatedAt: t }); remember(name, before, after, c.fields); d[name][i] = after; } } }); },
+    get changes() { return clone(changeLog); },
+    async undoChange(id) {
+      const item = changeLog.find(x => x.id === id);
+      if (!item || item.undone) throw new Error('Цю зміну вже скасовано або її немає в історії.');
+      const record = data[item.collection]?.find(x => x.id === item.recordId);
+      if (!record || Object.keys(item.next).some(k => JSON.stringify(record[k] ?? null) !== JSON.stringify(item.next[k]))) throw new Error('Запис уже змінено. Відкрийте його й перевірте поточні значення.');
+      await mutate(d => { const i = d[item.collection].findIndex(x => x.id === item.recordId); d[item.collection][i] = Schema.normalizeRecord(item.collection, { ...d[item.collection][i], ...item.previous, updatedAt: nowISO() }); item.undone = true; });
+    },
     /** Повертає запис до попереднього стану (для «Скасувати»). Якщо prev = null — видаляє створений запис. */
     async restore(name, id, prev) { await mutate(d => { d[name] = d[name].filter(x => x.id !== id); if (prev) d[name].push(Schema.normalizeRecord(name, { ...prev, updatedAt: nowISO() })); }); },
     async remove(name, id) { await mutate(d => { d[name] = d[name].filter(x => x.id !== id); }); },
@@ -90,8 +110,8 @@ export function createRepo() {
       });
     },
     exportObject() { return { ...JSON.parse(JSON.stringify(data)), exportedAt: nowISO() }; },
-    async replaceAll(newData) { data = Schema.normalize(newData); await persist(); emit(); },
-    async reset() { data = Schema.empty(); await persist(); emit(); },
+    async replaceAll(newData) { changeLog = []; data = Schema.normalize(newData); await persist(); emit(); },
+    async reset() { changeLog = []; data = Schema.empty(); await persist(); emit(); },
     async reloadFromStorage() { try { const raw = await adapter.load(); if (raw) { data = Schema.normalize(Schema.migrate(raw)); emit(); } } catch {} },
     /** Зміна, що прийшла з іншого пристрою. Застосовується, якщо вона новіша за локальну версію. */
     applyRemote(collection, id, record, deleted) {

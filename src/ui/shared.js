@@ -12,16 +12,18 @@ export const PAGES = [
   ['suppliers', 'Постачальники'], ['products', 'Товари та ціни'], ['purchases', 'Закупівлі'], ['notes', 'Нотатки'],
   ['budget', 'Бюджет відкриття'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість'],
   ['data', 'Дані й акаунт'],
+  ['payments', 'Платежі'], ['firstbuy', 'Перша закупівля'],
 ];
 /* Розділи з вкладками. Перша вкладка відкривається за замовчуванням. */
 export const SECTIONS = {
-  planner: { name: 'Планер', tabs: [['planner', 'Завдання'], ['reminders', 'Нагадування']] },
+  planner: { name: 'Справи', tabs: [['planner', 'Завдання'], ['reminders', 'Нагадування']] },
   opening: { name: 'Відкриття', tabs: [['opening', 'План відкриття'], ['premises', 'Приміщення'], ['fitout', 'Облаштування']] },
-  finance: { name: 'Фінанси', tabs: [['budget', 'Бюджет відкриття'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість']] },
+  finance: { name: 'Фінанси', tabs: [['budget', 'Бюджет відкриття'], ['payments', 'Платежі'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість']] },
+  purchases: { name: 'Закупівлі', tabs: [['purchases', 'Усі закупівлі'], ['firstbuy', 'Перша закупівля']] },
 };
 /* Основне меню: [id розділу або сторінки, назва, іконка]. */
 export const NAV = [
-  ['home', 'Головна', 'home'], ['planner', 'Планер', 'planner'], ['opening', 'Відкриття', 'premises'],
+  ['home', 'Огляд', 'home'], ['planner', 'Справи', 'planner'], ['opening', 'Відкриття магазину', 'premises'],
   ['suppliers', 'Постачальники', 'suppliers'], ['products', 'Товари та ціни', 'products'], ['purchases', 'Закупівлі', 'purchases'], ['notes', 'Нотатки', 'notes'],
   ['finance', 'Фінанси', 'budget'], ['ai', 'AI-менеджер', 'ai'],
 ];
@@ -58,7 +60,10 @@ export const statusPill = s => `<span class="pill ${({ interested: 'info', conta
 export const prioPill = p => `<span class="pill ${({ high: 'bad', medium: 'warn', low: '' })[p]}">${Schema.PRIORITIES[p]}</span>`;
 /** Меню «Ще» для рідкісних дій сторінки: items — [act, назва]. */
 export const moreMenu = items => `<details class="more-menu"><summary class="btn" aria-label="Інші дії">⋯ Ще</summary><div class="more-pop" role="menu">${items.map(([act, label]) => `<button class="btn ghost" role="menuitem" data-act="${act}">${label}</button>`).join('')}</div></details>`;
-export const emptyState = (text, action, label, mini) => `<div class="empty ${mini ? 'mini' : ''}"><p>${text}</p><button class="btn ${mini ? 'sm' : ''} primary" data-act="${action}">${label}</button></div>`;
+export const emptyState = (text, action, label, mini) => {
+  const titles = { 'add-task': 'Завдань поки немає', 'add-product': 'Товарів поки немає', 'add-supplier': 'Постачальників поки немає', 'add-purchase': 'Закупівель поки немає', 'add-note': 'Нотаток поки немає', 'add-fitout': 'Список облаштування порожній', 'add-premises': 'Додайте приміщення', 'add-expense': 'Витрат поки немає', 'add-reminder': 'Нагадувань поки немає' };
+  return `<div class="empty ${mini ? 'mini' : 'atelier-empty'}"><span class="empty-art" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none"><rect x="21" y="18" width="58" height="68" rx="11"/><path d="M36 15v12M64 15v12M35 43h30M35 55h22M35 67h16"/><circle cx="74" cy="73" r="18"/><path d="M66 73h16M74 65v16"/></svg></span><div class="empty-copy">${!mini ? `<h2>${titles[action] || 'Тут починається наступний крок'}</h2>` : ''}<p>${text}</p><button class="btn ${mini ? 'sm' : ''} primary" data-act="${action}"><span aria-hidden="true">＋</span> ${label}</button></div></div>`;
+};
 export function ext(url) { if (!url) return ''; const u = /^https?:\/\//i.test(url) ? url : 'https://' + url; return `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(url.replace(/^https?:\/\//i, ''))}</a>`; }
 export function igLink(v) { if (!v) return ''; if (/^https?:\/\//i.test(v)) return ext(v); const h = v.replace(/^@/, '').trim(); return `<a href="https://instagram.com/${encodeURIComponent(h)}" target="_blank" rel="noopener noreferrer">@${esc(h)}</a>`; }
 

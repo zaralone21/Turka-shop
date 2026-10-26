@@ -1,4 +1,6 @@
 import './styles.css';
+import './comfort.css';
+import './minimal.css';
 import { Cloud } from './core/cloud.js';
 import { Repo } from './core/repo.js';
 import { renderAuth } from './ui/auth.js';
@@ -21,6 +23,7 @@ import './ui/views/fitout.js';
 import './ui/views/monthly.js';
 import './ui/ai.js';
 import './ui/events.js';
+import './ui/workspace.js';
 import { OPENING_ACTIONS } from './ui/opening.js';
 import { ACTIONS } from './ui/events.js';
 import { initNotifications } from './ui/notifications.js';
