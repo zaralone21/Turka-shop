@@ -28,7 +28,7 @@ const STATUS_HINT = {
   error: 'Не вдалося зв’язатися з сервером AI. Перевірте інтернет і спробуйте пізніше.',
 };
 const TOOL_LABELS = {
-  get_overview: 'огляд справ', list_tasks: 'завдання', list_reminders: 'нагадування', get_budget: 'бюджет', list_purchases: 'закупівлі',
+  get_overview: 'огляд справ', list_tasks: 'завдання', list_reminders: 'нагадування', get_budget: 'бюджет', list_purchases: 'закупівлі', list_cart: 'кошик закупівель',
   search_records: 'пошук', get_record: 'запис', compare_offers: 'порівняння цін', check_purchase_plan: 'розрахунок закупівлі', data_quality: 'перевірка даних',
   web_search: 'пошук у мережі', web_fetch: 'перегляд сайту', create_task: 'створення завдання', create_note: 'створення нотатки', create_reminder: 'створення нагадування', propose_changes: 'підготовка змін', draft_message: 'чернетка',
 };

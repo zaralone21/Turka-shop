@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cartGroups, cartTotals, itemFromProduct, lineSum, lineUnits, minOrderProgress, purchaseFromGroup, qtyText, sourceChanges, supplierListText } from '../src/core/cart.js';
+import { cartGroups, cartTotals, itemFromProduct, lineSum, lineUnits, minOrderProgress, purchaseFromGroup, qtyText, sourceChanges, supplierListText, withCatalogLinks } from '../src/core/cart.js';
 import { Calc } from '../src/core/calc.js';
 import { Schema } from '../src/core/schema.js';
 
@@ -56,6 +56,11 @@ describe('кошик закупівель', () => {
     expect(sourceChanges(it, pack)).toEqual([]);
     expect(sourceChanges(it, { ...pack, purchasePrice: 400 })).toEqual(['закупівельна ціна']);
     expect(sourceChanges(it, null)).toEqual(['deleted']);
+    // Перше посилання в каталозі — не зміна; позиція бере його з товару.
+    const noUrl = { ...it, url: '', src: { ...it.src, url: '' } };
+    expect(sourceChanges(noUrl, { ...pack, url: 'https://x.ua/p' })).toEqual([]);
+    expect(withCatalogLinks([noUrl], [{ ...pack, url: 'https://x.ua/p' }])[0].url).toBe('https://x.ua/p');
+    expect(sourceChanges({ ...it, url: 'https://a.ua', src: { ...it.src, url: 'https://a.ua' } }, { ...pack, url: 'https://b.ua' })).toEqual(['посилання']);
   });
   it('список для постачальника без роздробу й маржі', () => {
     const p = { ...pack, retailPrice: 99, comment: 'секрет' };
