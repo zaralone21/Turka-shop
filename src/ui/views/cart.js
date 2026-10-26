@@ -2,6 +2,7 @@ import { cartGroups, cartTotals, deliveryId, itemFromProduct, lineSum, minOrderL
 import { Repo } from '../../core/repo.js';
 import { byText, esc, fmtDate, fmtMoney, fmtNum, isNum, parseNum, plural, todayISO } from '../../core/utils.js';
 import { copyText } from '../backup.js';
+import { planCartImport } from '../../core/cartImport.js';
 import { closeModal, openModal } from '../modal.js';
 import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, toast } from '../shared.js';
@@ -106,13 +107,14 @@ function summaryHtml(t, gs) {
   <div class="cart-bar" aria-hidden="false"><div><span class="k">${t.positions} ${plural(t.positions, 'позиція', 'позиції', 'позицій')} · ${t.suppliers} ${plural(t.suppliers, 'постачальник', 'постачальники', 'постачальників')}</span><b>${fmtMoney(t.total)}${t.incomplete || t.noDelivery.length ? '*' : ''}</b></div><button type="button" class="btn primary" data-act="cart-create" ${t.positions && !UI.cartBusy ? '' : 'aria-disabled="true"'}>${UI.cartBusy ? 'Створення…' : label}</button></div>`;
 }
 
+const importBtn = `<label class="btn cart-import" title="Файл зі списком товарів з кошиків оптовиків">${svg('plus')}Імпорт у кошик<input type="file" accept=".json,application/json" data-act="cart-import-file" class="sr"></label>`;
 VIEWS.cart = () => {
   const gs = groups(); const t = cartTotals(gs);
   const done = (UI.cartDone || []).filter(x => Repo.get('purchases', x.id));
-  const top = `<div class="cart-top"><button type="button" class="btn ghost" data-act="cart-back">← До каталогу</button><p class="muted">Каталог → додати товари → перевірити кількості й суми → створити заплановані закупівлі за постачальниками.</p></div>
+  const top = `<div class="cart-top"><button type="button" class="btn ghost" data-act="cart-back">← До каталогу</button><p class="muted">Каталог → додати товари → перевірити кількості й суми → створити заплановані закупівлі за постачальниками.</p>${importBtn}</div>
     ${done.length ? `<div class="callout ok cart-done" role="status"><b>Створено ${done.length} ${plural(done.length, 'заплановану закупівлю', 'заплановані закупівлі', 'запланованих закупівель')}.</b> Вони не позначені оплаченими чи замовленими, а до бюджету вносяться кнопкою «Внести в бюджет» у закупівлі.<div class="row">${done.map(x => `<button type="button" class="btn sm" data-act="edit-purchase" data-id="${x.id}">${esc(x.title)}</button>`).join('')}<button type="button" class="btn sm ghost" data-act="go-purchases">Усі закупівлі</button></div></div>` : ''}
     ${UI.cartError ? `<div class="callout bad" role="alert">${esc(UI.cartError)}</div>` : ''}`;
-  if (!gs.length) return top + `<div class="empty cart-empty"><p>Кошик порожній. Додайте товари кнопкою «До кошика» в каталозі.</p><button class="btn primary" data-act="cart-back">Перейти до каталогу</button></div>`;
+  if (!gs.length) return top + `<div class="empty cart-empty"><p>Кошик порожній. Додайте товари кнопкою «До кошика» в каталозі.</p><div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="cart-back">Перейти до каталогу</button>${importBtn}</div></div>`;
   return top + `<div class="cart-layout"><div class="cart-groups">${gs.map(groupHtml).join('')}</div>${summaryHtml(t, gs)}</div>`;
 };
 
@@ -179,7 +181,35 @@ export const CART_ACTIONS = {
   'go-cart': () => { UI.catalogScroll = UI.page === 'products' ? window.scrollY : 0; UI.cartDone = []; UI.cartError = ''; },
 };
 /** Зміни полів і прапорців кошика (подія change). */
+/** Перегляд імпорту: що додасться, що вже є, і лише після «Додати» запис. */
+async function importCartFile(file) {
+  if (!file) return;
+  let obj; try { if (file.size > 2 * 1024 * 1024) throw new Error(); obj = JSON.parse(await file.text()); } catch { return toast('Файл не вдалося прочитати. Потрібен файл імпорту в кошик (.json).', 'error'); }
+  const res = planCartImport(obj, D());
+  if (!res.ok) return openModal({ title: 'Файл не підходить', narrow: true, body: `<div class="modal-b"><div class="callout bad"><ul style="margin:0;padding-left:18px">${res.errors.slice(0, 8).map(e => `<li>${esc(e)}</li>`).join('')}</ul></div><p class="small muted" style="margin:0">Нічого не змінено.</p></div>`, foot: '<div class="modal-f"><button class="btn" data-close>Закрити</button></div>' });
+  const { plan } = res; const bySup = new Map();
+  for (const l of plan.lines) { const g = bySup.get(l.supplier) || { n: 0, sum: 0, skip: 0, lines: [] }; g.lines.push(l); if (l.inCart) g.skip++; else { g.n++; g.sum += (l.price ?? 0) * l.qty; } bySup.set(l.supplier, g); }
+  const newP = plan.products.length, skip = plan.lines.filter(l => l.inCart).length, diff = plan.lines.filter(l => !l.isNewProduct && isNum(l.catalogPrice) && l.catalogPrice !== l.price);
+  const qtyLabel = l => (l.pack ? `${fmtNum(l.qty)} ${packWord(l.qty)}${isNum(l.packQty) ? ` × ${fmtNum(l.packQty)}` : ''}` : `${fmtNum(l.qty)} ${unitShort(l.unit)}`);
+  openModal({ title: 'Імпорт у кошик', wide: true,
+    body: `<div class="modal-b imp">${obj.note ? `<p class="small muted" style="margin:0">${esc(String(obj.note).slice(0, 300))}</p>` : ''}
+      <p style="margin:0"><b>До кошика додасться ${plan.cart.length} ${plural(plan.cart.length, 'позиція', 'позиції', 'позицій')}</b> від ${bySup.size} ${plural(bySup.size, 'постачальника', 'постачальників', 'постачальників')}. Нових товарів у каталозі: ${newP}, нових постачальників: ${plan.newSuppliers}.${skip ? ` Уже в кошику, пропускаються: ${skip}.` : ''}</p>
+      ${diff.length ? `<div class="callout warn">${diff.length} ${plural(diff.length, 'товар уже є', 'товари вже є', 'товарів уже є')} у каталозі з іншою ціною. Ціна з файлу піде лише в кошик, каталог не зміниться.</div>` : ''}
+      ${[...bySup].map(([name, g]) => `<details class="imp-g"><summary><b>${esc(name)}</b><span>${g.n} ${plural(g.n, 'позиція', 'позиції', 'позицій')} · ${fmtMoney(g.sum)}${g.skip ? ` · ${g.skip} уже в кошику` : ''}</span></summary>
+        <ul>${g.lines.map(l => `<li class="${l.inCart ? 'muted' : ''}"><span>${esc(l.name)}${l.isNewProduct ? '' : ' <span class="pill">є в каталозі</span>'}${l.inCart ? ' <span class="pill">уже в кошику</span>' : ''}</span><span class="num">${qtyLabel(l)} · ${isNum(l.price) ? fmtMoney(l.price) : 'ціну уточнити'}</span></li>`).join('')}</ul></details>`).join('')}
+      <p class="small muted" style="margin:0">Наявні товари й постачальники не змінюються. Нічого не надсилається постачальникам.</p></div>`,
+    foot: `<div class="modal-f"><button class="btn" type="button" data-close>Скасувати</button><button class="btn primary" type="button" data-imp-ok ${plan.cart.length || newP ? '' : 'disabled'}>Додати до кошика</button></div>`,
+    onMount: m => { m.querySelector('[data-imp-ok]').onclick = async e => {
+      const b = e.currentTarget; if (b.disabled) return; b.disabled = true; b.textContent = 'Додавання…';
+      try {
+        await Repo.importCart(plan);
+        if (!Repo.status.cloud && Repo.status.lastError) throw new Error('браузер не зміг записати дані');
+        closeModal(); toast(`Додано до кошика: ${plan.cart.length}`);
+      } catch (ex) { b.disabled = false; b.textContent = 'Додати до кошика'; toast(`Не вдалося імпортувати: ${ex.message}`, 'error'); }
+    }; } });
+}
 export const CART_CHANGE = {
+  'cart-import-file': el => { const f = el.files[0]; el.value = ''; importCartFile(f); },
   'cart-sel': el => Repo.update('cart', el.dataset.id, { selected: el.checked }),
   'cart-sel-all': el => { const g = groups().find(x => (x.supplierId || 'none') === el.dataset.sid); if (g) Repo.updateMany('cart', g.items.map(i => ({ id: i.id, fields: { selected: el.checked } }))); },
   'cart-qty': el => { const n = num(el.value); const it = Repo.get('cart', el.dataset.id); if (!it) return;
