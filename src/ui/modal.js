@@ -6,7 +6,9 @@ import { svg } from './shell.js';
    7. МОДАЛЬНІ ВІКНА ТА ФОРМИ
    ===================================================================== */
 export let modalEl = null, lastFocus = null;
-export function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); } }
+let onCloseCb = null;
+/** Закриває вікно; якщо при відкритті передали onClose, викликає його (наприклад, повернення до перегляду). */
+export function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); const cb = onCloseCb; onCloseCb = null; if (cb) setTimeout(cb); } }
 const isSheet = () => matchMedia('(max-width: 900px)').matches;
 /** Телефон: свайп униз за шапку закриває вікно, якщо в ньому нічого не змінено. */
 function wireSheet(back) {
@@ -26,8 +28,8 @@ if (window.visualViewport) {
   const kb = () => { const v = visualViewport; const h = Math.max(0, Math.round(innerHeight - v.height - v.offsetTop)); document.documentElement.style.setProperty('--kb', (h > 80 ? h : 0) + 'px'); };
   visualViewport.addEventListener('resize', kb); visualViewport.addEventListener('scroll', kb);
 }
-export function openModal({ title, body, foot, narrow, wide, onMount }) {
-  closeModal(); lastFocus = document.activeElement;
+export function openModal({ title, body, foot, narrow, wide, onMount, onClose }) {
+  onCloseCb = null; closeModal(); lastFocus = document.activeElement; onCloseCb = onClose || null;
   modalEl = document.createElement('div'); modalEl.className = 'modal-back';
   modalEl.innerHTML = `<div class="modal ${narrow ? 'narrow' : wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-h"><h2>${esc(title)}</h2><button class="btn ghost icon" data-close aria-label="Закрити">✕</button></div>${body}${foot || ''}</div>`;
   modalEl.addEventListener('mousedown', e => { if (e.target === modalEl) closeModal(); });
@@ -56,8 +58,8 @@ export const F = {
 export const supplierOptions = () => [['', '— не вказано —'], ...[...D().suppliers].sort((a, b) => byText(a.name, b.name)).map(s => [s.id, s.name])];
 
 /** Загальна форма: build → html полів; read(fd, form) → {errors, values}; save(values). */
-export function formModal({ title, fields, read, save, onMount, onDelete, wide, submitLabel = 'Зберегти' }) {
-  openModal({ title, wide, body: `<form class="modal-b" id="modal-form" novalidate><div class="form-error" hidden></div><div class="form-grid">${fields}</div></form>`,
+export function formModal({ title, fields, read, save, onMount, onDelete, onClose, wide, submitLabel = 'Зберегти' }) {
+  openModal({ title, wide, onClose, body: `<form class="modal-b" id="modal-form" novalidate><div class="form-error" hidden></div><div class="form-grid">${fields}</div></form>`,
     foot: `<div class="modal-f">${onDelete ? '<button class="btn danger" type="button" data-del style="margin-right:auto">Видалити</button>' : ''}<button class="btn" type="button" data-close>Скасувати</button><button class="btn primary" type="submit" form="modal-form">${submitLabel}</button></div>`,
     onMount: m => {
       const form = m.querySelector('form');

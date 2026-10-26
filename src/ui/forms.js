@@ -9,8 +9,8 @@ import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plura
 import { ACTIONS } from './events.js';
 import { F, closeModal, confirmDialog, dateField, formModal, g, moneyField, openModal, supplierOptions } from './modal.js';
 import { LOCAL_BYTES, MAX_PHOTOS, dataBytes, deletePhotos, hydratePhotos, photoImg, savePhoto } from './photos.js';
-import { D, UI, toast } from './shared.js';
-import { render } from './shell.js';
+import { D, UI, ext, toast } from './shared.js';
+import { render, svg } from './shell.js';
 
 /* --- постачальник --- */
 export function supplierForm(id) {
@@ -92,13 +92,14 @@ export async function regroupDialog() {
 }
 
 /* --- товар --- */
-export function productForm(id, presetSupplier) {
+export function productForm(id, presetSupplier, { backToView } = {}) {
   const p = id ? Repo.get('products', id) : null;
   const v = p || { priceType: 'unit', priceDate: todayISO(), supplierId: presetSupplier || '' };
   const sections = D().settings.sections;
   const catOpts = [['', '— без розділу —'], ...sections.map(x => [x.name, x.name]), ...(v.category && !sections.some(x => x.name === v.category) ? [[v.category, v.category]] : [])];
   const subsOf = c => uniq([...(sections.find(x => x.name === c)?.subs || []), ...D().products.filter(x => x.category === c).map(x => x.subcategory).filter(Boolean)]);
   const ph = { kept: [...(p?.photos || [])], removed: [], pending: [] };
+  let deleting = false;
   formModal({
     title: p ? 'Редагувати товар' : 'Новий товар',
     fields: `${F.text('name', 'Назва', v.name, { req: true, full: true })}
@@ -141,7 +142,9 @@ export function productForm(id, presetSupplier) {
       const retailPrice = moneyField(fd, 'retailPrice', errors);
       return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), priceType: type, purchasePrice, packQty, retailPrice, priceDate: dateField(fd, 'priceDate', errors), comment: g(fd, 'comment') } };
     },
-    onDelete: p ? () => ACTIONS['del-product']({ dataset: { id: p.id } }) : null,
+    onDelete: p ? () => { deleting = true; ACTIONS['del-product']({ dataset: { id: p.id } }); } : null,
+    // З перегляду: і «Зберегти», і «Скасувати» повертають до (оновленого) перегляду товару.
+    onClose: backToView && p ? () => { if (!deleting && Repo.get('products', p.id)) productView(p.id); } : null,
     save: async vals => {
       const id = p ? p.id : uid();
       const btn = document.querySelector('.modal-f [type=submit]'); if (btn && ph.pending.length) { btn.disabled = true; btn.textContent = 'Завантаження фото…'; }
@@ -192,11 +195,67 @@ function wirePhotoEditor(box, ph) {
   });
   draw();
 }
+/** Перегляд товару без полів введення. Редактор відкривається лише кнопкою «Редагувати». */
+export function productView(id, start = 0) {
+  const p = Repo.get('products', id); if (!p) return;
+  const photos = p.photos || []; let i = Math.min(Math.max(0, start), Math.max(0, photos.length - 1));
+  const none = '<span class="muted">Не задано</span>';
+  const cost = Calc.unitCost(p), retail = p.retailPrice;
+  const profit = isNum(cost) && isNum(retail) ? retail - cost : null;
+  const neg = v => isNum(v) && v < 0 ? ' class="bad"' : '';
+  const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  const opt = (k, v) => v ? row(k, v) : '';
+  const sup = p.supplierId ? Repo.get('suppliers', p.supplierId) : null;
+  const known = new Set(['id', 'name', 'category', 'subcategory', 'sku', 'supplierId', 'url', 'sizes', 'colors', 'priceType', 'purchasePrice', 'packQty', 'retailPrice', 'priceDate', 'comment', 'photos', 'createdAt', 'updatedAt']);
+  const extra = Object.entries(p).filter(([k, v]) => !known.has(k) && (typeof v === 'string' ? v.trim() : typeof v === 'number' || typeof v === 'boolean'));
+  const gallery = photos.length ? `<div class="pv-photo"><button type="button" class="pv-main" data-pv-full aria-label="Відкрити фото на весь екран">${photoImg(photos[i], 'pv-img', p.name)}</button>
+      ${photos.length > 1 ? `<div class="pv-thumbs" role="group" aria-label="Інші фото">${photos.map((x, j) => `<button type="button" class="pv-thumb ${j === i ? 'on' : ''}" data-pv="${j}" aria-label="Фото ${j + 1} з ${photos.length}" aria-pressed="${j === i}">${photoImg(x, '', '')}</button>`).join('')}</div>` : ''}</div>`
+    : '<div class="pv-photo pv-nophoto"><span>Фото ще немає</span></div>';
+  const body = `<div class="modal-b product-view">${gallery}<div class="pv-info">
+    <h3 class="pv-name">${esc(p.name)}</h3>
+    <dl class="kv pv-kv">
+      ${row('Артикул', p.sku ? esc(p.sku) : none)}
+      ${row('Розділ', p.category ? esc(p.category) : none)}
+      ${p.category ? row('Підрозділ', p.subcategory ? esc(p.subcategory) : none) : ''}
+      ${row('Постачальник', sup ? `<button type="button" class="btn link" data-pv-sup>${esc(sup.name)}</button>` : none)}
+      ${row('Розміри', p.sizes ? esc(p.sizes) : none)}
+      ${row('Кольори', p.colors ? esc(p.colors) : none)}
+    </dl>
+    <h4 class="pv-sub">Ціни</h4>
+    <dl class="kv pv-kv">
+      ${row('Ціна закупівлі', isNum(p.purchasePrice) ? `${fmtMoney(p.purchasePrice)} ${p.priceType === 'pack' ? 'за упаковку' : 'за одиницю'}` : none)}
+      ${p.priceType === 'pack' ? row('Одиниць в упаковці', isNum(p.packQty) ? fmtNum(p.packQty) : none) : ''}
+      ${p.priceType === 'pack' ? row('Ціна одиниці', isNum(cost) ? fmtMoney(cost) : none) : ''}
+      ${row('Роздрібна ціна', isNum(retail) ? fmtMoney(retail) : none)}
+      ${row('Заробіток з одиниці', isNum(profit) ? `<b${neg(profit)}>${fmtMoney(profit)}</b>` : none)}
+      ${row('Націнка', isNum(profit) ? `<span${neg(profit)}>${fmtPct(Calc.markup(cost, retail))}</span>` : none)}
+      ${row('Маржа', isNum(profit) ? `<span${neg(profit)}>${fmtPct(Calc.margin(cost, retail))}</span>` : none)}
+      ${row('Ціна актуальна на', p.priceDate ? fmtDate(p.priceDate) : none)}
+    </dl>
+    ${p.url || p.comment || extra.length ? `<dl class="kv pv-kv">
+      ${opt('Посилання', p.url ? ext(p.url) : '')}
+      ${opt('Коментар', p.comment ? `<span class="pre">${esc(p.comment)}</span>` : '')}
+      ${extra.map(([k, v]) => row(esc(k), esc(typeof v === 'boolean' ? (v ? 'так' : 'ні') : String(v)))).join('')}
+    </dl>` : ''}
+    <p class="small muted pv-upd">Оновлено ${fmtDate(p.updatedAt, true)}</p>
+  </div></div>`;
+  openModal({ title: 'Товар', wide: true, body, foot: `<div class="modal-f"><button class="btn" type="button" data-close>Закрити</button><button class="btn primary" type="button" data-pv-edit>${svg('note')}Редагувати</button></div>`,
+    onMount: m => {
+      hydratePhotos(m);
+      m.addEventListener('click', e => {
+        const t = e.target.closest('[data-pv]');
+        if (t) { i = +t.dataset.pv; m.querySelector('.pv-main').innerHTML = photoImg(photos[i], 'pv-img', p.name); m.querySelectorAll('[data-pv]').forEach(b => { const on = +b.dataset.pv === i; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); hydratePhotos(m); return; }
+        if (e.target.closest('[data-pv-full]')) openGallery(p, i, () => productView(id, i));
+        else if (e.target.closest('[data-pv-sup]')) { closeModal(); ACTIONS['open-supplier']({ dataset: { id: p.supplierId } }); }
+        else if (e.target.closest('[data-pv-edit]')) productForm(id, null, { backToView: true });
+      });
+    } });
+}
 /** Перегляд фото товару на весь екран. */
-export function openGallery(product, start = 0) {
+export function openGallery(product, start = 0, onClose) {
   const list = product.photos || []; if (!list.length) return;
   let i = Math.min(Math.max(0, start), list.length - 1);
-  openModal({ title: product.name || 'Фото', wide: true, body: '<div class="modal-b gallery"></div>', onMount: m => {
+  openModal({ title: product.name || 'Фото', wide: true, onClose, body: '<div class="modal-b gallery"></div>', onMount: m => {
     const box = m.querySelector('.gallery');
     const draw = () => {
       box.innerHTML = `<div class="gallery-main">${photoImg(list[i], 'gallery-img', product.name)}</div>

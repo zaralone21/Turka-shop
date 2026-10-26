@@ -6,7 +6,7 @@ import { expenseOrigins } from '../core/opening.js';
 import { Repo } from '../core/repo.js';
 import { KEYS, esc, parseNum, todayISO } from '../core/utils.js';
 import { copyText, exportJSON, importFile, showJSON } from './backup.js';
-import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
+import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, productView, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { deletePhotos } from './photos.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
@@ -34,7 +34,7 @@ export const ACTIONS = {
   'open-supplier': el => { UI.supplierId = el.dataset.id; go('suppliers'); UI.supplierId = el.dataset.id; render(); },
   'back-suppliers': () => { UI.supplierId = null; render(); },
   'supplier-checked': async el => { await Repo.update('suppliers', el.dataset.id, { checkedAt: todayISO() }); toast('Дату перевірки оновлено'); },
-  'add-product': el => productForm(null, el.dataset.supplier), 'edit-product': el => productForm(el.dataset.id),
+  'add-product': el => productForm(null, el.dataset.supplier), 'edit-product': el => productForm(el.dataset.id), 'view-product': el => productView(el.dataset.id),
   'del-product': async el => { const p = Repo.get('products', el.dataset.id); const n = (p.photos || []).length; if (await confirmDialog({ title: 'Видалити товар?', text: `<p style="margin:0">«${esc(p.name)}» буде видалено${n ? ` разом із фото (${n})` : ''}.</p>` })) { await Repo.remove('products', p.id); deletePhotos(p.photos); toast('Товар видалено'); } },
   'product-photos': el => { const p = Repo.get('products', el.dataset.id); if (p) openGallery(p); },
   'add-note': el => noteForm(null, el.dataset.supplier), 'edit-note': el => noteForm(el.dataset.id),

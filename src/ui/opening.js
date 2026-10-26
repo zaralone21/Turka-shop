@@ -287,7 +287,7 @@ export function openingDateForm() {
 export function openRef(collection, id) {
   const open = { suppliers: () => ACTIONS['open-supplier']({ dataset: { id } }), tasks: () => taskForm(id), purchases: () => ACTIONS['edit-purchase']({ dataset: { id } }),
     expenses: () => expenseForm(id), reminders: () => ACTIONS['edit-reminder']({ dataset: { id } }), fitout: () => fitoutForm(id), monthly: () => monthlyForm(id),
-    premises: () => { UI.premisesId = id; go('premises'); }, products: () => ACTIONS['edit-product']({ dataset: { id } }), notes: () => ACTIONS['edit-note']({ dataset: { id } }) }[collection];
+    premises: () => { UI.premisesId = id; go('premises'); }, products: () => ACTIONS['view-product']({ dataset: { id } }), notes: () => ACTIONS['edit-note']({ dataset: { id } }) }[collection];
   if (open && (collection === 'premises' || Repo.get(collection, id))) open(); else toast('Запис не знайдено', 'error');
 }
 
