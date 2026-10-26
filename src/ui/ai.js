@@ -34,7 +34,7 @@ const TOOL_LABELS = {
 };
 const OWN_CARD = new Set(['propose_product_photos', 'add_product_photos', 'create_task', 'create_note', 'create_reminder', 'propose_changes', 'draft_message']);
 const MONEY = new Set(['purchasePrice', 'retailPrice', 'planned', 'paid', 'totalBudget', 'deliveryCost']);
-const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'edit-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder', premises: 'open-ref', fitout: 'edit-fitout', monthly: 'edit-monthly' };
+const COLLECTION_ACT = { suppliers: 'open-supplier', products: 'view-product', notes: 'edit-note', tasks: 'edit-task', expenses: 'edit-expense', purchases: 'edit-purchase', reminders: 'edit-reminder', premises: 'open-ref', fitout: 'edit-fitout', monthly: 'edit-monthly' };
 const CREATED = { tasks: 'завдання', notes: 'нотатку', reminders: 'нагадування' };
 const FIELD = { title: 'назва', name: 'назва', deadline: 'термін', priority: 'пріоритет', status: 'статус', description: 'опис', purchasePrice: 'ціна закупівлі', retailPrice: 'роздрібна ціна', priceDate: 'дата ціни', packQty: 'у пакуванні', planned: 'план', paid: 'сплачено', totalBudget: 'загальний бюджет', expectedDate: 'очікувана дата', deliveryCost: 'доставка', date: 'дата', time: 'час', body: 'текст', supplierId: 'постачальник', categoryId: 'категорія' };
 const SUGGEST = ['Що заважає відкритися до обраної дати?', 'Що ще потрібно купити для приміщення?', 'Склади план підготовки на тиждень', 'Що мені зробити сьогодні й цього тижня?', 'Порівняй пропозиції на шкарпетки', 'Чи вміщається наступна закупівля в бюджет?', 'Яких даних бракує або вони застаріли?'];
@@ -164,7 +164,7 @@ function entryHtml(e, i, interactive) {
     const total = e.items.reduce((s, x) => s + x.added.length, 0);
     const head = e.state === 'undone' ? `Фото прибрано (${total})` : (() => { const n = e.items.filter(x => x.added.length).length; return `<b>Додано фото: ${total}</b> до ${n} ${plural(n, 'товару', 'товарів', 'товарів')}`; })();
     const rows = e.items.map(x => { const p = Repo.get('products', x.productId);
-      const name = p ? `<button class="btn link" data-act="edit-product" data-id="${esc(p.id)}">${esc(p.name)}</button>` : esc(x.name || 'товар');
+      const name = p ? `<button class="btn link" data-act="view-product" data-id="${esc(p.id)}">${esc(p.name)}</button>` : esc(x.name || 'товар');
       return `<li>${name}: ${x.added.length ? `+${x.added.length}` : '0'}${x.failed.length ? ` <span class="small muted">(не вдалося: ${x.failed.map(esc).join('; ')})</span>` : ''}</li>`; }).join('');
     const btn = interactive && e.state === 'applied' && total ? `<button class="btn sm ghost" data-act="ai-photos-undo-all" data-i="${i}">Прибрати всі додані фото</button>` : '';
     return `<div class="msg action"><div>${head}</div>${e.source ? `<div class="small muted">Джерело: <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">${esc(e.source.replace(/^https?:\/\//, '').slice(0, 60))}</a></div>` : ''}${e.state !== 'undone' ? `<ul class="plan">${rows}</ul>` : ''}<div class="row">${btn}</div></div>`;
@@ -175,7 +175,7 @@ function entryHtml(e, i, interactive) {
     const imgs = e.state === 'pending' || e.state === 'busy' ? `<div class="ai-photos">${e.urls.map(u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : '';
     const fails = (e.failed || []).length ? `<div class="small muted">Не вдалося: ${e.failed.map(f => esc(f)).join('; ')}</div>` : '';
     const btns = !interactive ? '' : e.state === 'pending' ? `<button class="btn sm primary" data-act="ai-photos-ok" data-i="${i}">Додати</button><button class="btn sm" data-act="ai-photos-no" data-i="${i}">Відхилити</button>`
-      : e.state === 'applied' && prod ? `<button class="btn sm" data-act="edit-product" data-id="${esc(prod.id)}">Відкрити товар</button>${(e.added || []).length ? `<button class="btn sm ghost" data-act="ai-photos-undo" data-i="${i}">Прибрати</button>` : ''}` : '';
+      : e.state === 'applied' && prod ? `<button class="btn sm" data-act="view-product" data-id="${esc(prod.id)}">Відкрити товар</button>${(e.added || []).length ? `<button class="btn sm ghost" data-act="ai-photos-undo" data-i="${i}">Прибрати</button>` : ''}` : '';
     return `<div class="msg action ${e.state === 'pending' ? 'confirm' : ''}"><div>${head}</div>${e.source ? `<div class="small muted">Джерело: <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">${esc(e.source.replace(/^https?:\/\//, '').slice(0, 60))}</a></div>` : ''}${imgs}${fails}<div class="row">${btns}</div></div>`;
   }
   if (e.type === 'confirm') {
