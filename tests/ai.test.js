@@ -135,6 +135,26 @@ describe('цикл розмови з моделлю (імітація)', () => {
     expect(second[2].content.map(b => b.tool_use_id)).toEqual(['tu1', 'tu2']);
     expect(second[0].content[0].text).toMatch(/^\[Зараз: \d{4}-\d{2}-\d{2} \d{2}:\d{2}, Київ\]/);
   });
+  it('вставлені фото: модель бачить лише id, файли зберігаються в товар через attach_photos', async () => {
+    const repo = await repoWith(sample);
+    const saved = [];
+    const pasted = { has: id => id === 'img-a' || id === 'img-b', save: async (pid, id) => { saved.push([pid, id]); return { id: 'ph-' + id, path: `u/${pid}/${id}.jpg` }; } };
+    const callModel = scripted([
+      () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'tu1', name: 'attach_photos', input: { items: [{ productId: 'p1', photoIds: ['img-a', 'img-b', 'img-zzz'] }] } }] }),
+      () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Додав 2 фото.' }] }),
+    ]);
+    const chat = await runTurn({ chat: { messages: [], log: [] }, text: 'до бамбукових', attachments: ['img-a', 'img-b'], pasted, repo, callModel });
+    const first = callModel.seen[0][0].content[0].text;
+    expect(first).toContain('№1 id=img-a'); expect(first).toContain('№2 id=img-b');
+    expect(saved).toEqual([['p1', 'img-a'], ['p1', 'img-b']]);
+    expect(repo.get('products', 'p1').photos.map(f => f.id)).toEqual(['ph-img-a', 'ph-img-b']);
+    const res = JSON.parse(callModel.seen[1][2].content[0].content);
+    expect(res.products[0]).toMatchObject({ added: 2 }); expect(res.products[0].failed[0]).toContain('вставте його ще раз');
+    expect(chat.log[0]).toMatchObject({ role: 'user', photos: ['img-a', 'img-b'] });
+    expect(chat.log.find(l => l.type === 'photos')).toMatchObject({ batch: true, state: 'applied' });
+    // без входу інструмент чесно відмовляє
+    await expect(runTool('attach_photos', { items: [{ productId: 'p1', photoIds: ['img-a'] }] }, { repo })).rejects.toThrow('після входу');
+  });
   it('помилка інструмента повертається моделі як is_error, а не ламає розмову', async () => {
     const repo = await repoWith(sample);
     const callModel = scripted([
