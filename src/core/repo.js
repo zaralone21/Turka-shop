@@ -85,6 +85,13 @@ export function createRepo() {
       await mutate(d => { if (d.purchases.some(x => x.id === rec.id)) return; d.purchases.push(rec); d.cart = d.cart.filter(x => !drop.has(x.id)); });
       return rec;
     },
+    /** Імпорт у кошик одним збереженням: нові постачальники, товари й позиції кошика. Наявне не змінюється. */
+    async importCart({ suppliers, products, cart }) {
+      await mutate(d => {
+        for (const [k, list] of [['suppliers', suppliers], ['products', products], ['cart', cart]])
+          for (const r of list) if (!d[k].some(x => x.id === r.id)) d[k].push(Schema.normalizeRecord(k, r));
+      });
+    },
     get changes() { return clone(changeLog); },
     async undoChange(id) {
       const item = changeLog.find(x => x.id === id);
