@@ -555,3 +555,11 @@ table.t td { padding: 16px 15px; }
   .modal-h h2 { font-size: 23px; }
   .ai-layout .chat { height: 62dvh; min-height: 380px; }
 }
+.catalog-prices b { white-space: nowrap; }
+.catalog-prices .retail-none { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); padding-top: 4px; }
+.catalog-profit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--ok-soft); }
+.catalog-profit > span { display: flex; flex-direction: column; gap: 3px; }
+.catalog-profit .k { font-size: 10px; color: var(--text-muted); }
+.catalog-profit b { font-weight: 600; font-size: 16px; letter-spacing: -.02em; white-space: nowrap; color: var(--ok, var(--text)); font-variant-numeric: tabular-nums; }
+.catalog-profit b.bad { color: var(--danger); }
+@media (max-width: 900px) { .catalog-profit { padding: 8px 10px; gap: 5px; } .catalog-profit b { font-size: 14px; } .catalog-profit .k { font-size: 8px; } }
