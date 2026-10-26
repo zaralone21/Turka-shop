@@ -44,6 +44,23 @@ describe('інструменти AI: розрахунки з перевірен�
     const big = checkPurchasePlan(repo.data, [{ productId: 'p2', qty: 3000 }]);
     expect(big.fitsBudget).toBe(false); expect(big.overBy).toBe(25000);
   });
+  it('кошик закупівель видно менеджеру: id товарів, посилання, фото й фільтри', async () => {
+    const repo = await repoWith(d => {
+      sample(d);
+      d.suppliers[0].website = 'opt.ua';
+      d.products[0].url = 'https://opt.ua/p1'; d.products[0].photos = [{ id: 'f1', path: 'u1/p1/f1.jpg' }];
+      d.cart.push({ id: 'c1', kind: 'item', productId: 'p1', supplierId: 's1', name: 'Шкарпетки бамбук', sku: 'A1', url: '', buyBy: 'pack', packQty: 10, qty: 2, price: 300 },
+        { id: 'c2', kind: 'item', productId: 'p3', supplierId: 's2', name: 'Шкарпетки бамбук дитячі', qty: 5, price: 20 });
+    });
+    const all = (await runTool('list_cart', { filter: 'all' }, { repo })).result;
+    expect(all.summary).toMatchObject({ positions: 2, suppliers: 2, goodsSum: 700, withoutUrl: 1, withoutPhotos: 1 });
+    const g1 = all.groups.find(g => g.supplierId === 's1');
+    expect(g1.website).toBe('opt.ua');
+    expect(g1.items[0]).toMatchObject({ productId: 'p1', url: 'https://opt.ua/p1', photos: 1, units: 20, sum: 600 });
+    const noUrl = (await runTool('list_cart', { filter: 'no_url' }, { repo })).result;
+    expect(noUrl.groups.flatMap(g => g.items).map(i => i.productId)).toEqual(['p3']);
+    expect((await runTool('get_overview', {}, { repo })).result.cart.positions).toBe(2);
+  });
   it('огляд показує прострочене й бюджет', async () => {
     const repo = await repoWith(sample);
     const { result } = await runTool('get_overview', {}, { repo });

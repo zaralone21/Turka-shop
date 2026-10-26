@@ -63,7 +63,8 @@ export function sourceChanges(it, product) {
   if (a.packQty !== b.packQty) out.push('розмір упаковки');
   if (a.unit !== b.unit) out.push('одиниця');
   if (a.supplierId !== b.supplierId) out.push('постачальник');
-  if (a.sku !== b.sku || a.url !== b.url) out.push(a.sku !== b.sku ? 'артикул' : 'посилання');
+  // Посилання, додане до товару вперше, — не зміна: позиція просто бере його з каталогу.
+  if (a.sku !== b.sku) out.push('артикул'); else if (a.url && a.url !== b.url) out.push('посилання');
   return out;
 }
 /** Поля позиції, оновлені з каталогу (кількість і вибір лишаються). */
@@ -105,6 +106,13 @@ export function minOrderProgress(min, selected) {
   }
   return out;
 }
+
+/** Позиції без власного посилання беруть посилання товару з каталогу. */
+export const withCatalogLinks = (cart, products) => cart.map(x => {
+  if (x.kind !== 'item' || x.url || !x.productId) return x;
+  const url = products.find(p => p.id === x.productId)?.url;
+  return url ? { ...x, url } : x;
+});
 
 /** Групи кошика за постачальниками: товари без постачальника — окремою групою в кінці. */
 export function cartGroups(cart, suppliers, byText = (a, b) => a.localeCompare(b, 'uk')) {

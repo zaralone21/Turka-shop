@@ -1,4 +1,4 @@
-import { cartGroups, cartTotals, deliveryId, itemFromProduct, lineSum, minOrderLabel, minOrderOf, minOrderProgress, perLabel, purchaseFromGroup, qtyText, refreshFromProduct, sourceChanges, supplierListText, unitShort, unitWord, packWord } from '../../core/cart.js';
+import { cartGroups, cartTotals, deliveryId, itemFromProduct, lineSum, minOrderLabel, minOrderOf, minOrderProgress, perLabel, purchaseFromGroup, qtyText, refreshFromProduct, sourceChanges, supplierListText, unitShort, unitWord, packWord, withCatalogLinks } from '../../core/cart.js';
 import { Repo } from '../../core/repo.js';
 import { byText, esc, fmtDate, fmtMoney, fmtNum, isNum, parseNum, plural, todayISO } from '../../core/utils.js';
 import { copyText } from '../backup.js';
@@ -11,7 +11,7 @@ import { svg } from '../shell.js';
 /* ---------- Кошик закупівель: підбір товарів → заплановані закупівлі ---------- */
 const items = () => D().cart.filter(x => x.kind === 'item');
 export const cartItemFor = productId => items().find(i => i.productId === productId) || null;
-const groups = () => cartGroups(D().cart, D().suppliers, byText);
+const groups = () => cartGroups(withCatalogLinks(D().cart, D().products), D().suppliers, byText);
 const shortQty = it => `${fmtNum(it.qty)} ${it.buyBy === 'pack' ? 'уп.' : unitShort(it.unit)}`;
 
 /** Кнопка «Кошик» з кількістю позицій і сумою: у каталозі та в закупівлях. */

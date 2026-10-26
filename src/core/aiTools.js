@@ -1,3 +1,4 @@
+import { cartGroups, cartTotals, lineSum, lineUnits, withCatalogLinks } from './cart.js';
 import { Calc } from './calc.js';
 import { STALE_PRICE_DAYS, STALE_SUPPLIER_DAYS, runChecks } from './checks.js';
 import { FITOUT_STATUSES, MONTHLY_KINDS, PREMISES_STATUSES, fitoutCategoryName, fitoutLink, fitoutSummary, isLeaseConfirmed, mainPremises, monthlySummary, nextPayDate, openingReadiness, premisesBudgetPlan, purchaseLink } from './opening.js';
@@ -25,7 +26,7 @@ const isDate = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !i
 function brief(d, col, r) {
   switch (col) {
     case 'suppliers': return clean({ id: r.id, name: r.name, status: Schema.SUPPLIER_STATUSES[r.status], city: r.city, categories: r.categories, contacts: [r.phone, r.messenger, r.instagram, r.website].filter(Boolean).join(', ') || null, checkedAt: r.checkedAt || null });
-    case 'products': { const c = Calc.unitCost(r); return clean({ id: r.id, name: r.name, category: r.category, subcategory: r.subcategory, supplier: nameOf(d, 'suppliers', r.supplierId), supplierId: r.supplierId, unitCost: money(c), retailPrice: r.retailPrice, priceDate: r.priceDate || null, priceStale: r.priceDate ? ageDays(r.priceDate) > STALE_PRICE_DAYS : null }); }
+    case 'products': { const c = Calc.unitCost(r); return clean({ id: r.id, name: r.name, category: r.category, subcategory: r.subcategory, supplier: nameOf(d, 'suppliers', r.supplierId), supplierId: r.supplierId, unitCost: money(c), retailPrice: r.retailPrice, priceDate: r.priceDate || null, priceStale: r.priceDate ? ageDays(r.priceDate) > STALE_PRICE_DAYS : null, sku: r.sku, url: r.url, photos: (r.photos || []).length }); }
     case 'notes': return clean({ id: r.id, title: r.title || 'Без заголовка', excerpt: cut(r.body, 200), supplierId: r.supplierId, updatedAt: r.updatedAt.slice(0, 10) });
     case 'tasks': return clean({ id: r.id, title: r.title, status: Schema.TASK_STATUSES[r.status], deadline: r.deadline || null, overdue: r.status !== 'done' && r.deadline ? daysFromToday(r.deadline) < 0 : null, priority: Schema.PRIORITIES[r.priority], openingPrep: r.prep || null });
     case 'expenses': return clean({ id: r.id, name: r.name, category: d.settings.budgetCategories.find(c => c.id === r.categoryId)?.name, planned: r.planned, paid: r.paid });
@@ -59,6 +60,7 @@ function overview(d, now) {
     },
     budget: { total: b.total, needed: money(b.needed), paid: money(b.paid), toPay: money(b.toPay), free: money(b.free) },
     purchases: { plannedSum: money(p.planned), awaitingSum: money(p.awaiting), counts: p.count },
+    cart: (() => { const t = cartTotals(cartGroups(d.cart || [], d.suppliers)); return { positions: (d.cart || []).filter(x => x.kind === 'item').length, selectedSum: money(t.total), note: 'Деталі — list_cart' }; })(),
     opening: (() => { const r = openingReadiness(d, now); return { openingDate: r.openingDate, daysLeft: r.daysLeft, premises: r.premises && { id: r.premises.id, title: r.premises.title, status: r.premises.status, leaseConfirmed: r.premises.leaseConfirmed }, prepTasks: r.prep, blockers: r.blockers.length, note: 'Деталі: get_opening_status' }; })(),
     warnings: runChecks(d, now).map(c => ({ level: c.level, text: c.text, ref: c.ref || undefined })),
   };
@@ -137,6 +139,23 @@ function listPurchases(d, status) {
   const list = status === 'all' ? d.purchases : d.purchases.filter(p => p.status === status);
   const s = Calc.purchases(d);
   return { summary: { plannedSum: money(s.planned), awaitingSum: money(s.awaiting), receivedSum: money(s.received), counts: s.count }, ...limited(d, 'purchases', list) };
+}
+/** Кошик закупівель: позиції за постачальниками з id товарів, посиланнями й кількістю фото. */
+function listCart(d, filter) {
+  const products = new Map(d.products.map(p => [p.id, p]));
+  const groups = cartGroups(withCatalogLinks(d.cart || [], d.products), d.suppliers);
+  const t = cartTotals(groups);
+  const pick = { all: () => true, no_url: i => !i.url, no_photos: i => !(products.get(i.productId)?.photos || []).length };
+  need(pick[filter], 'Невідомий фільтр');
+  let n = 0;
+  return {
+    summary: { positions: groups.reduce((s, g) => s + g.items.length, 0), selected: t.positions, suppliers: groups.length, goodsSum: money(t.goods), delivery: money(t.delivery), total: money(t.total), withoutPrice: t.noPrice.length || null,
+      withoutUrl: groups.reduce((s, g) => s + g.items.filter(pick.no_url).length, 0), withoutPhotos: groups.reduce((s, g) => s + g.items.filter(pick.no_photos).length, 0) },
+    groups: groups.map(g => ({ supplier: g.supplier?.name || 'Без постачальника', supplierId: g.supplierId, website: g.supplier?.website || null, goodsSum: money(g.goods), delivery: g.delivery,
+      items: g.items.filter(pick[filter]).filter(() => n++ < 120).map(i => clean({ productId: i.productId, name: i.name, sku: i.sku, url: i.url, photos: (products.get(i.productId)?.photos || []).length,
+        qty: i.qty, buyBy: i.buyBy === 'pack' ? 'упаковки' : null, packQty: i.packQty, units: lineUnits(i), price: i.price, sum: money(lineSum(i)), selected: i.selected ? null : false, productDeleted: i.productId && !products.has(i.productId) ? true : null })) })).filter(g => g.items.length),
+    truncated: n > 120 ? `показано 120 з ${n}` : undefined,
+  };
 }
 function search(d, query, collections) {
   const q = String(query || '').toLowerCase().trim(); need(q, 'Порожній запит');
@@ -287,6 +306,7 @@ export async function runTool(name, input, { repo, now = new Date(), importPhoto
     case 'list_reminders': return { result: listReminders(d, input.filter || 'upcoming', now) };
     case 'get_budget': return { result: budget(d) };
     case 'list_purchases': return { result: listPurchases(d, input.status || 'all') };
+    case 'list_cart': return { result: listCart(d, input.filter || 'all') };
     case 'search_records': return { result: search(d, input.query, input.collections) };
     case 'get_record': return { result: getRecord(d, input.collection, input.id) };
     case 'compare_offers': return { result: compareOffers(d, input.query) };
