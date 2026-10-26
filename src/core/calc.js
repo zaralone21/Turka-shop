@@ -11,6 +11,8 @@ export const Calc = {
     return p.purchasePrice;
   },
   /** Націнка = (роздрібна − закупівельна) / закупівельна × 100 */
+  /** Різниця на одиниці = роздрібна − закупівельна за одиницю (без інших витрат). */
+  diff(cost, retail) { return isNum(cost) && isNum(retail) ? retail - cost : null; },
   markup(cost, retail) { return isNum(cost) && isNum(retail) && cost > 0 ? (retail - cost) / cost * 100 : null; },
   /** Маржа = (роздрібна − закупівельна) / роздрібна × 100 */
   margin(cost, retail) { return isNum(cost) && isNum(retail) && retail > 0 ? (retail - cost) / retail * 100 : null; },

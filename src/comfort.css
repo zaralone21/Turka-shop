@@ -598,3 +598,45 @@ table.t td { padding: 16px 15px; }
 .pv-kv dt, .pv-kv dd { font-size: inherit; }
 .modal-f .btn[data-pv-edit] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
 .modal-f .btn[data-pv-edit]:hover { background: var(--primary-hover, var(--primary)); }
+
+/* ---------- картки товарів: однакова структура ---------- */
+.product-gallery .catalog-card { height: 100%; }
+.product-gallery .catalog-image { aspect-ratio: auto; height: 172px; padding: 16px; flex: none; }
+.product-gallery .catalog-image > img { max-height: 100%; }
+.product-gallery .catalog-info { display: flex; flex-direction: column; gap: 8px; padding: 14px; flex: 1; }
+.product-gallery .catalog-meta { font-size: 11px; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.product-gallery .catalog-name { --lh: 1.35em; font-size: 14px; line-height: var(--lh); height: calc(var(--lh) * 2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.product-gallery .catalog-prices { margin-top: 2px; padding-top: 0; gap: 10px; }
+.product-gallery .catalog-prices > span { gap: 2px; min-width: 0; }
+.product-gallery .catalog-prices .k, .product-gallery .catalog-profit .k { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-gallery .catalog-prices b { display: block; height: 26px; line-height: 26px; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.product-gallery .catalog-prices .retail-none { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); padding: 0; }
+.product-gallery .catalog-profit { height: 56px; box-sizing: border-box; padding: 8px 12px; gap: 10px; align-items: center; border-radius: 10px; background: var(--surface-2); }
+.product-gallery .catalog-profit > span { gap: 1px; min-width: 0; }
+.product-gallery .catalog-profit b { font-size: 15px; line-height: 20px; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.product-gallery .catalog-profit.pos { background: var(--ok-soft); }
+.product-gallery .catalog-profit.pos b { color: var(--ok); }
+.product-gallery .catalog-profit.neg { background: var(--danger-soft); }
+.product-gallery .catalog-profit.neg b { color: color-mix(in srgb, var(--danger) 85%, var(--text)); }
+.product-gallery .catalog-profit.empty-metrics { display: flex; justify-content: center; font-size: 12px; color: var(--text-muted); background: none; border: 1px dashed var(--border); }
+.pv-hint { display: block; margin-top: 2px; font-size: .76rem; color: var(--text-muted); }
+@media (max-width: 900px) {
+  .product-gallery .catalog-image { height: 124px; padding: 10px; }
+  .product-gallery .catalog-info { padding: 10px; gap: 6px; }
+  .product-gallery .catalog-meta { font-size: 10px; }
+  .product-gallery .catalog-name { font-size: 12.5px; height: calc(var(--lh) * 3); -webkit-line-clamp: 3; }
+  .product-gallery .catalog-prices { gap: 6px; }
+  .product-gallery .catalog-prices .k, .product-gallery .catalog-profit .k { font-size: 9.5px; }
+  .product-gallery .catalog-prices b { font-size: 14.5px; height: 22px; line-height: 22px; }
+  .product-gallery .catalog-prices .retail-none { font-size: 11.5px; }
+  .product-gallery .catalog-profit { height: 48px; padding: 6px 8px; gap: 6px; }
+  .product-gallery .catalog-profit b { font-size: 13px; line-height: 18px; }
+  .product-gallery .catalog-profit.empty-metrics { font-size: 10.5px; text-align: center; }
+}
+/* розмір цифр залежить від ширини картки, щоб довгі суми не обрізались */
+.product-gallery .catalog-card { container-type: inline-size; }
+.product-gallery .catalog-prices b { font-size: clamp(11px, 7cqi, 18px); }
+.product-gallery .catalog-prices .retail-none { font-size: clamp(10px, 5.6cqi, 13px); }
+.product-gallery .catalog-profit b { font-size: clamp(10.5px, 6cqi, 15px); }
+.product-gallery .catalog-prices .k, .product-gallery .catalog-profit .k { font-size: clamp(9px, 4.6cqi, 11px); }
+@media (max-width: 360px) { .product-gallery .catalog-profit { padding: 6px; gap: 4px; } .product-gallery .catalog-profit b { font-size: clamp(9.5px, 6cqi, 15px); } }

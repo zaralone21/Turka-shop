@@ -1,11 +1,12 @@
 import { Calc } from '../../core/calc.js';
 import { NO_SECTION, SORTS, groupProducts, planRegroup, sectionOrder } from '../../core/sections.js';
-import { byText, daysFromToday, esc, fmtDate, fmtMoney, fmtNum, fmtPct, isNum, plural } from '../../core/utils.js';
+import { byText, daysFromToday, esc, fmtDate, fmtMoney, fmtNum, fmtPct, isNum, plural, signedMoney, signedPct } from '../../core/utils.js';
 import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, emptyState, ext, supplierName, moreMenu } from '../shared.js';
 import { svg } from '../shell.js';
 
 /* ---------- 3. Товари ---------- */
+export const DIFF_HINT = 'Роздрібна ціна мінус закупівельна ціна за одиницю, без урахування інших витрат';
 export const FORMULAS = `<details class="explain"><summary>Формули</summary><div class="formula">
   <span><b>Ціна одиниці</b> = ціна упаковки ÷ кількість одиниць в упаковці</span>
   <span><b>Націнка</b> = (роздрібна ціна − ціна одиниці) ÷ ціна одиниці × 100%</span>
@@ -14,9 +15,13 @@ export const FORMULAS = `<details class="explain"><summary>Формули</summa
 export const prodView = () => { try { return localStorage.getItem('komfort-prod-view') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } };
 export function productMobile(list, showSupplier, cls = 'only-m') {
   if (cls === 'prod-cards') return `<div class="product-gallery">${list.map(p => {
-    const cost = Calc.unitCost(p), margin = Calc.margin(cost, p.retailPrice);
-    const profit = isNum(cost) && isNum(p.retailPrice) ? p.retailPrice - cost : null;
-    return `<button class="catalog-card" data-act="view-product" data-id="${p.id}"><span class="catalog-image">${p.photos?.length ? photoImg(p.photos[0], '', p.name) : `<span class="catalog-placeholder">${svg('products')}<span>Фото ще немає</span></span>`}${p.category ? `<span class="catalog-category">${esc(p.category)}</span>` : ''}</span><span class="catalog-info"><span class="catalog-meta">${esc([p.sku && 'АРТ. ' + p.sku, showSupplier && supplierName(p.supplierId)].filter(Boolean).join(' · ')) || 'КАТАЛОГ МАГАЗИНУ'}</span><span class="catalog-name">${esc(p.name)}</span>${p.sizes ? `<span class="catalog-sizes">Розміри: ${esc(p.sizes)}</span>` : ''}<span class="catalog-prices"><span><span class="k">Закупівля / од.</span><b>${fmtMoney(cost)}</b></span><span><span class="k">Роздріб</span>${isNum(p.retailPrice) ? `<b class="retail">${fmtMoney(p.retailPrice)}</b>` : '<b class="retail-none">не задано</b>'}</span></span>${isNum(profit) ? `<span class="catalog-profit"><span><span class="k">Заробіток / од.</span><b class="${profit < 0 ? 'bad' : ''}">${fmtMoney(profit)}</b></span><span><span class="k">Маржа</span><b class="${profit < 0 ? 'bad' : ''}">${fmtPct(margin)}</b></span></span>` : ''}<span class="catalog-bottom"><span>${isNum(profit) ? `Націнка <b>${fmtPct(Calc.markup(cost, p.retailPrice))}</b>` : 'Задайте роздріб, щоб бачити маржу'}</span><span>${p.priceDate ? fmtDate(p.priceDate) : 'Ціну не перевірено'}</span></span></span></button>`;
+    const cost = Calc.unitCost(p), d = Calc.diff(cost, p.retailPrice), tone = !isNum(d) ? '' : d > 0 ? 'pos' : d < 0 ? 'neg' : 'zero';
+    const sup = p.supplierId ? supplierName(p.supplierId) : '';
+    return `<button class="catalog-card" data-act="view-product" data-id="${p.id}" aria-label="Відкрити товар ${esc(p.name)}"><span class="catalog-image">${p.photos?.length ? photoImg(p.photos[0], '', p.name) : `<span class="catalog-placeholder">${svg('products')}<span>Фото ще немає</span></span>`}</span>
+      <span class="catalog-info"><span class="catalog-meta">${esc(sup || 'Постачальник не вказаний')}</span><span class="catalog-name" title="${esc(p.name)}">${esc(p.name)}</span>
+      <span class="catalog-prices"><span><span class="k">Закупівля / од.</span>${isNum(cost) ? `<b>${fmtMoney(cost)}</b>` : '<b class="retail-none">Не задано</b>'}</span><span><span class="k">Роздріб</span>${isNum(p.retailPrice) ? `<b class="retail">${fmtMoney(p.retailPrice)}</b>` : '<b class="retail-none">Не задано</b>'}</span></span>
+      ${isNum(d) ? `<span class="catalog-profit ${tone}" title="${DIFF_HINT}"><span><span class="k">Різниця / од.</span><b>${signedMoney(d)}</b></span><span><span class="k">Маржа</span><b>${signedPct(Calc.margin(cost, p.retailPrice))}</b></span></span>`
+        : `<span class="catalog-profit empty-metrics">${isNum(cost) ? 'Вкажіть роздрібну ціну' : 'Вкажіть закупівельну ціну'}</span>`}</span></button>`;
   }).join('')}</div>`;
   return `<div class="m-list ${cls}">${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);
@@ -24,7 +29,7 @@ export function productMobile(list, showSupplier, cls = 'only-m') {
     const n = (p.photos || []).length;
     return `<button class="m-item prod-item" data-act="view-product" data-id="${p.id}"><span class="lead lg">${n ? photoImg(p.photos[0], '', p.name) : svg('products')}</span>
       <span class="mn"><b class="nm">${esc(p.name)}</b>${sub ? `<span class="m-sub">${sub}</span>` : ''}
-      <span class="m-metrics"><span>Закуп <b>${fmtMoney(c)}</b></span><span>Роздріб <b>${fmtMoney(p.retailPrice)}</b></span>${isNum(c) && isNum(p.retailPrice) ? `<span>Заробіток <b style="${p.retailPrice - c < 0 ? 'color:var(--danger)' : ''}">${fmtMoney(p.retailPrice - c)}</b></span>` : ''}</span>
+      <span class="m-metrics"><span>Закуп <b>${fmtMoney(c)}</b></span><span>Роздріб <b>${fmtMoney(p.retailPrice)}</b></span>${isNum(c) && isNum(p.retailPrice) ? `<span title="${DIFF_HINT}">Різниця <b style="${p.retailPrice - c < 0 ? 'color:var(--danger)' : ''}">${signedMoney(p.retailPrice - c)}</b></span>` : ''}</span>
       <span class="m-sub">${p.priceType === 'pack' ? `${fmtMoney(p.purchasePrice)} за уп. ${fmtNum(p.packQty)} шт · ` : ''}ціна від ${fmtDate(p.priceDate)} · маржа <span style="${isNum(mg) && mg < 0 ? 'color:var(--danger)' : ''}">${fmtPct(mg)}</span></span></span>
       <span class="trail"><span class="small muted">Націнка</span><b class="big" style="${isNum(mk) && mk < 0 ? 'color:var(--danger)' : ''}">${fmtPct(mk)}</b>${n > 1 ? `<span class="small muted">${n} фото</span>` : ''}</span></button>`;
   }).join('')}</div>`;
@@ -34,7 +39,7 @@ const thumbBtn = p => { const n = (p.photos || []).length;
   return n ? `<button class="thumb-btn" data-act="product-photos" data-id="${p.id}" aria-label="Фото товару (${n})">${photoImg(p.photos[0], 'thumb', p.name)}${n > 1 ? `<i>${n}</i>` : ''}</button>` : ''; };
 export function productTable(list, showSupplier) {
   if (prodView() === 'cards') return productMobile(list, showSupplier, 'prod-cards');
-  return productMobile(list, showSupplier) + `<div class="table-wrap hide-m"><table class="t stack"><thead><tr><th>Товар</th><th>Розділ</th>${showSupplier ? '<th>Постачальник</th>' : ''}<th class="r">Закупівля</th><th class="r">Ціна од.</th><th class="r">Роздріб</th><th class="r">Заробіток / од.</th><th class="r">Націнка</th><th class="r">Маржа</th><th>Ціна від</th><th class="acts"><span class="sr">Дії</span></th></tr></thead><tbody>
+  return productMobile(list, showSupplier) + `<div class="table-wrap hide-m"><table class="t stack"><thead><tr><th>Товар</th><th>Розділ</th>${showSupplier ? '<th>Постачальник</th>' : ''}<th class="r">Закупівля</th><th class="r">Ціна од.</th><th class="r">Роздріб</th><th class="r" title="${DIFF_HINT}">Різниця / од.</th><th class="r">Націнка</th><th class="r">Маржа</th><th>Ціна від</th><th class="acts"><span class="sr">Дії</span></th></tr></thead><tbody>
   ${list.map(p => {
     const c = Calc.unitCost(p), mk = Calc.markup(c, p.retailPrice), mg = Calc.margin(c, p.retailPrice);
     const age = p.priceDate ? -daysFromToday(p.priceDate) : null;
@@ -45,7 +50,7 @@ export function productTable(list, showSupplier) {
       <td class="r" data-label="Закупівля"><span>${fmtMoney(p.purchasePrice)}${p.priceType === 'pack' ? `<br><span class="small muted">за уп. ${fmtNum(p.packQty)} шт</span>` : ''}</span></td>
       <td class="r" data-label="Ціна од.">${fmtMoney(c)}</td>
       <td class="r" data-label="Роздріб">${fmtMoney(p.retailPrice)}</td>
-      <td class="r" data-label="Заробіток / од." style="${isNum(c) && isNum(p.retailPrice) && p.retailPrice < c ? 'color:var(--danger)' : ''}">${isNum(c) && isNum(p.retailPrice) ? fmtMoney(p.retailPrice - c) : '—'}</td>
+      <td class="r" data-label="Різниця / од." style="${isNum(c) && isNum(p.retailPrice) && p.retailPrice < c ? 'color:var(--danger)' : ''}">${isNum(c) && isNum(p.retailPrice) ? signedMoney(p.retailPrice - c) : '—'}</td>
       <td class="r" data-label="Націнка">${fmtPct(mk)}</td>
       <td class="r" data-label="Маржа" style="${isNum(mg) && mg < 0 ? 'color:var(--danger)' : ''}">${fmtPct(mg)}</td>
       <td data-label="Ціна від">${fmtDate(p.priceDate)}${age !== null && age > 60 ? ' <span class="pill warn">стара</span>' : ''}</td>
