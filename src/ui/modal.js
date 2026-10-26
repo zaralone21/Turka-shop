@@ -6,9 +6,32 @@ import { svg } from './shell.js';
    7. МОДАЛЬНІ ВІКНА ТА ФОРМИ
    ===================================================================== */
 export let modalEl = null, lastFocus = null;
-let onCloseCb = null;
+let onCloseCb = null, lockY = null, focusKey = [];
+/* Поки відкрите вікно, фонова сторінка не прокручується; після закриття повертаємось на те саме місце. */
+function lockScroll() {
+  if (lockY !== null) return; lockY = window.scrollY;
+  // Фокус повертається на елемент сторінки, з якого відкрили вікно, навіть якщо сторінку перемалювали.
+  const a = document.activeElement; lastFocus = a && a !== document.body ? a : null;
+  const key = el => (el?.dataset?.act ? `[data-act="${el.dataset.act}"]${el.dataset.id ? `[data-id="${el.dataset.id}"]` : ''}` : '');
+  focusKey = [key(a), key(a?.parentElement?.closest('[data-act]'))].filter(Boolean);
+  Object.assign(document.body.style, { position: 'fixed', top: -lockY + 'px', left: '0', right: '0', width: '100%' });
+  document.documentElement.classList.add('modal-open');
+}
+function unlockScroll() {
+  if (lockY === null) return; const y = lockY; lockY = null;
+  Object.assign(document.body.style, { position: '', top: '', left: '', right: '', width: '' });
+  document.documentElement.classList.remove('modal-open');
+  window.scrollTo(0, y);
+  const el = lastFocus?.isConnected ? lastFocus : focusKey.map(k => root.querySelector(k)).find(Boolean);
+  if (el) el.focus({ preventScroll: true });
+}
 /** Закриває вікно; якщо при відкритті передали onClose, викликає його (наприклад, повернення до перегляду). */
-export function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); const cb = onCloseCb; onCloseCb = null; if (cb) setTimeout(cb); } }
+export function closeModal() {
+  if (!modalEl) return; modalEl.remove(); modalEl = null;
+  const cb = onCloseCb; onCloseCb = null;
+  // Якщо після закриття відкриється інше вікно (повернення до перегляду), фон лишається заблокованим.
+  if (cb) setTimeout(() => { cb(); if (!modalEl) unlockScroll(); }); else unlockScroll();
+}
 const isSheet = () => matchMedia('(max-width: 900px)').matches;
 /** Телефон: свайп униз за шапку закриває вікно, якщо в ньому нічого не змінено. */
 function wireSheet(back) {
@@ -29,15 +52,16 @@ if (window.visualViewport) {
   visualViewport.addEventListener('resize', kb); visualViewport.addEventListener('scroll', kb);
 }
 export function openModal({ title, body, foot, narrow, wide, onMount, onClose }) {
-  onCloseCb = null; closeModal(); lastFocus = document.activeElement; onCloseCb = onClose || null;
+  onCloseCb = null; closeModal(); onCloseCb = onClose || null;
   modalEl = document.createElement('div'); modalEl.className = 'modal-back';
   modalEl.innerHTML = `<div class="modal ${narrow ? 'narrow' : wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-h"><h2>${esc(title)}</h2><button class="btn ghost icon" data-close aria-label="Закрити">✕</button></div>${body}${foot || ''}</div>`;
   modalEl.addEventListener('mousedown', e => { if (e.target === modalEl) closeModal(); });
   modalEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModal(); });
+  lockScroll();
   document.body.appendChild(modalEl);
   wireSheet(modalEl);
   onMount && onMount(modalEl);
-  const first = modalEl.querySelector('input:not([type=hidden]):not(.sr), textarea, select, .modal-f .btn'); first && first.focus();
+  const first = modalEl.querySelector('input:not([type=hidden]):not(.sr), textarea, select, .modal-f .btn'); first && first.focus({ preventScroll: true });
 }
 /** Підтвердження всередині сторінки (системні confirm() тут не працюють). */
 export function confirmDialog({ title, text, ok = 'Видалити', danger = true }) {
@@ -72,7 +96,15 @@ export function formModal({ title, fields, read, save, onMount, onDelete, onClos
           const box = form.querySelector('.form-error'); box.hidden = false; box.textContent = 'Перевірте позначені поля.';
           const firstBad = form.querySelector('.bad'); firstBad && firstBad.focus(); return;
         }
-        await save(values); closeModal();
+        const btn = m.querySelector('.modal-f [type=submit]'), label = btn?.textContent;
+        if (btn) btn.disabled = true;
+        try { await save(values); }
+        catch (ex) {
+          // Введене лишається у формі, щоб можна було спробувати ще раз.
+          if (btn) { btn.disabled = false; btn.textContent = label; }
+          const box = form.querySelector('.form-error'); box.hidden = false; box.textContent = `Не вдалося зберегти${ex?.message ? `: ${ex.message}` : ''}. Введене залишилось, спробуйте ще раз.`; return;
+        }
+        closeModal();
       });
       wireDateFields(m);
       if (onDelete) m.querySelector('[data-del]').onclick = () => { closeModal(); onDelete(); };

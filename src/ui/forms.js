@@ -110,12 +110,7 @@ export function productForm(id, presetSupplier, { backToView } = {}) {
       ${F.text('url', 'Посилання на товар', v.url, { ph: 'https://…' })}
       ${F.text('sizes', 'Розміри', v.sizes, { ph: 'Напр.: 36–40, S–XL' })}
       ${F.text('colors', 'Кольори', v.colors, { ph: 'Напр.: чорний, бежевий' })}
-      <div class="field full"><span class="lbl">Ціна закупівлі вказана</span><div class="seg" role="radiogroup"><label><input type="radio" name="priceType" value="unit" ${v.priceType !== 'pack' ? 'checked' : ''}>за одиницю</label><label><input type="radio" name="priceType" value="pack" ${v.priceType === 'pack' ? 'checked' : ''}>за упаковку</label></div></div>
-      ${F.money('purchasePrice', 'Ціна закупівлі, ₴', v.purchasePrice, { req: true })}
-      <div id="pack-wrap">${F.money('packQty', 'Одиниць в упаковці', v.packQty, { req: true })}</div>
-      ${F.money('retailPrice', 'Планова роздрібна ціна за одиницю, ₴', v.retailPrice)}
-      ${F.date('priceDate', 'Ціна актуальна на', v.priceDate)}
-      <div class="full calc-preview" id="calc-preview"></div>
+      ${priceFields(v)}
       ${F.area('comment', 'Коментар', v.comment, { rows: 2 })}
       <div class="field full"><span class="lbl">Фото</span><div class="photo-edit" id="photo-edit"></div>
         <span class="hint">До ${MAX_PHOTOS} фото. Великі знімки зменшуються автоматично.</span></div>`,
@@ -124,23 +119,12 @@ export function productForm(id, presetSupplier, { backToView } = {}) {
       wirePhotoEditor(m.querySelector('#photo-edit'), ph);
       const subList = () => { m.querySelector('#sub-list').innerHTML = subsOf(form.category.value).map(x => `<option value="${esc(x)}">`).join(''); };
       form.category.addEventListener('change', subList); subList();
-      const upd = () => {
-        const type = form.querySelector('[name=priceType]:checked').value;
-        m.querySelector('#pack-wrap').hidden = type !== 'pack';
-        const tmp = { priceType: type, purchasePrice: parseNum(form.purchasePrice.value), packQty: parseNum(form.packQty.value) };
-        const c = Calc.unitCost(tmp), r = parseNum(form.retailPrice.value);
-        m.querySelector('#calc-preview').innerHTML = `<div><span>Ціна одиниці</span><b>${fmtMoney(c)}</b></div><div><span>Націнка</span><b>${fmtPct(Calc.markup(c, r))}</b></div><div><span>Маржа</span><b>${fmtPct(Calc.margin(c, r))}</b></div>`;
-      };
-      form.addEventListener('input', upd); form.addEventListener('change', upd); upd();
+      wirePriceFields(m);
     },
     read: fd => {
       const errors = {}; if (!g(fd, 'name')) errors.name = 'Вкажіть назву.';
-      const type = fd.get('priceType') === 'pack' ? 'pack' : 'unit';
-      const purchasePrice = moneyField(fd, 'purchasePrice', errors, { required: true });
-      let packQty = null;
-      if (type === 'pack') { packQty = parseNum(fd.get('packQty')); if (packQty === null) errors.packQty = 'Вкажіть кількість одиниць.'; else if (Number.isNaN(packQty) || packQty <= 0) { errors.packQty = 'Має бути число більше нуля.'; packQty = null; } }
-      const retailPrice = moneyField(fd, 'retailPrice', errors);
-      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), priceType: type, purchasePrice, packQty, retailPrice, priceDate: dateField(fd, 'priceDate', errors), comment: g(fd, 'comment') } };
+      const prices = readPrices(fd, errors);
+      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), ...prices, comment: g(fd, 'comment') } };
     },
     onDelete: p ? () => { deleting = true; ACTIONS['del-product']({ dataset: { id: p.id } }); } : null,
     // З перегляду: і «Зберегти», і «Скасувати» повертають до (оновленого) перегляду товару.
@@ -195,59 +179,175 @@ function wirePhotoEditor(box, ph) {
   });
   draw();
 }
-/** Перегляд товару без полів введення. Редактор відкривається лише кнопкою «Редагувати». */
+/** Перегляд товару без полів введення. Повна форма відкривається кнопкою «Редагувати», частини — «Змінити». */
 export function productView(id, start = 0) {
   const p = Repo.get('products', id); if (!p) return;
   const photos = p.photos || []; let i = Math.min(Math.max(0, start), Math.max(0, photos.length - 1));
   const none = '<span class="muted">Не задано</span>';
   const cost = Calc.unitCost(p), retail = p.retailPrice;
-  const profit = Calc.diff(cost, retail);
-  const neg = v => isNum(v) && v < 0 ? ' class="bad"' : '';
+  const profit = Calc.diff(cost, retail), mg = Calc.margin(cost, retail), mk = Calc.markup(cost, retail);
+  const tone = v => isNum(v) && v < 0 ? ' class="bad"' : '';
   const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
-  const opt = (k, v) => v ? row(k, v) : '';
   const sup = p.supplierId ? Repo.get('suppliers', p.supplierId) : null;
   const known = new Set(['id', 'name', 'category', 'subcategory', 'sku', 'supplierId', 'url', 'sizes', 'colors', 'priceType', 'purchasePrice', 'packQty', 'retailPrice', 'priceDate', 'comment', 'photos', 'createdAt', 'updatedAt']);
   const extra = Object.entries(p).filter(([k, v]) => !known.has(k) && (typeof v === 'string' ? v.trim() : typeof v === 'number' || typeof v === 'boolean'));
-  const gallery = photos.length ? `<div class="pv-photo"><button type="button" class="pv-main" data-pv-full aria-label="Відкрити фото на весь екран">${photoImg(photos[i], 'pv-img', p.name)}</button>
+  const href = p.url ? (/^https?:\/\//i.test(p.url) ? p.url : 'https://' + p.url) : '';
+  const gallery = photos.length ? `<div class="pv-photo"><button type="button" class="pv-main" data-pv-full aria-label="Збільшити фото">${photoImg(photos[i], 'pv-img', p.name)}</button>
       ${photos.length > 1 ? `<div class="pv-thumbs" role="group" aria-label="Інші фото">${photos.map((x, j) => `<button type="button" class="pv-thumb ${j === i ? 'on' : ''}" data-pv="${j}" aria-label="Фото ${j + 1} з ${photos.length}" aria-pressed="${j === i}">${photoImg(x, '', '')}</button>`).join('')}</div>` : ''}</div>`
     : '<div class="pv-photo pv-nophoto"><span>Фото ще немає</span></div>';
+  const secH = (title, act, label) => `<div class="pv-sec-h"><h4 class="pv-sub">${title}</h4>${act ? `<button type="button" class="btn sm" ${act}>${label}</button>` : ''}</div>`;
+  const calc = isNum(profit) ? `${row('Різниця / од.', `<b${tone(profit)}>${signedMoney(profit)}</b><span class="pv-hint">Роздрібна ціна мінус закупівельна ціна за одиницю, без урахування інших витрат.</span>`)}
+      ${row('Маржа', isNum(mg) ? `<span${tone(profit)}>${signedPct(mg)}</span>` : '<span class="muted">Не розраховується за нульової роздрібної ціни</span>')}
+      ${row('Націнка', isNum(mk) ? `<span${tone(profit)}>${signedPct(mk)}</span>` : '<span class="muted">Не розраховується за нульової закупівлі</span>')}` : '';
+  const missing = !isNum(retail) ? `<div class="pv-missing"><span>Вкажіть роздрібну ціну, щоб побачити різницю та маржу</span><button type="button" class="btn sm primary" data-pv-retail>Вказати роздрібну ціну</button></div>`
+    : !isNum(cost) ? `<div class="pv-missing"><span>Вкажіть закупівельну ціну, щоб побачити різницю та маржу</span><button type="button" class="btn sm primary" data-pv-prices>Вказати закупівлю</button></div>` : '';
   const body = `<div class="modal-b product-view">${gallery}<div class="pv-info">
     <h3 class="pv-name">${esc(p.name)}</h3>
+    <section class="pv-sec" aria-label="Характеристики">${secH('Характеристики', 'data-pv-specs', 'Змінити')}
     <dl class="kv pv-kv">
       ${row('Артикул', p.sku ? esc(p.sku) : none)}
       ${row('Розділ', p.category ? esc(p.category) : none)}
       ${p.category ? row('Підрозділ', p.subcategory ? esc(p.subcategory) : none) : ''}
-      ${row('Постачальник', sup ? `<button type="button" class="btn link" data-pv-sup>${esc(sup.name)}</button>` : none)}
       ${row('Розміри', p.sizes ? esc(p.sizes) : none)}
       ${row('Кольори', p.colors ? esc(p.colors) : none)}
+      ${row('Постачальник', sup ? `<button type="button" class="btn link" data-pv-sup>${esc(sup.name)}</button>` : none)}
+      ${extra.map(([k, v]) => row(esc(k), esc(typeof v === 'boolean' ? (v ? 'так' : 'ні') : String(v)))).join('')}
     </dl>
-    <h4 class="pv-sub">Ціни</h4>
+    ${href ? `<a class="pv-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Відкрити у постачальника ↗</a>` : ''}</section>
+    <section class="pv-sec" aria-label="Ціни">${secH('Ціни', 'data-pv-prices', 'Змінити ціни')}
     <dl class="kv pv-kv">
       ${row('Ціна закупівлі', isNum(p.purchasePrice) ? `${fmtMoney(p.purchasePrice)} ${p.priceType === 'pack' ? 'за упаковку' : 'за одиницю'}` : none)}
       ${p.priceType === 'pack' ? row('Одиниць в упаковці', isNum(p.packQty) ? fmtNum(p.packQty) : none) : ''}
       ${p.priceType === 'pack' ? row('Ціна одиниці', isNum(cost) ? fmtMoney(cost) : none) : ''}
       ${row('Роздрібна ціна', isNum(retail) ? fmtMoney(retail) : none)}
-      ${row('Різниця / од.', isNum(profit) ? `<b${neg(profit)}>${signedMoney(profit)}</b><span class="pv-hint">Роздрібна ціна мінус закупівельна ціна за одиницю, без урахування інших витрат.</span>` : none)}
-      ${row('Маржа', isNum(Calc.margin(cost, retail)) ? `<span${neg(profit)}>${signedPct(Calc.margin(cost, retail))}</span>` : none)}
-      ${row('Націнка', isNum(Calc.markup(cost, retail)) ? `<span${neg(profit)}>${signedPct(Calc.markup(cost, retail))}</span>` : none)}
+      ${calc}
       ${row('Ціна актуальна на', p.priceDate ? fmtDate(p.priceDate) : none)}
-    </dl>
-    ${p.url || p.comment || extra.length ? `<dl class="kv pv-kv">
-      ${opt('Посилання', p.url ? ext(p.url) : '')}
-      ${opt('Коментар', p.comment ? `<span class="pre">${esc(p.comment)}</span>` : '')}
-      ${extra.map(([k, v]) => row(esc(k), esc(typeof v === 'boolean' ? (v ? 'так' : 'ні') : String(v)))).join('')}
-    </dl>` : ''}
-    <p class="small muted pv-upd">Оновлено ${fmtDate(p.updatedAt, true)}</p>
-  </div></div>`;
+    </dl>${missing}</section>
+  </div>
+  <section class="pv-comment" aria-label="Коментар"><h4 class="pv-sub">Коментар</h4>${p.comment ? `<p class="pre">${esc(p.comment)}</p>` : '<p class="muted">Коментаря ще немає.</p>'}</section>
+  <p class="small muted pv-upd">Оновлено ${fmtDate(p.updatedAt, true)}</p></div>`;
+  const back = () => productView(id, i);
   openModal({ title: 'Товар', wide: true, body, foot: `<div class="modal-f"><button class="btn" type="button" data-close>Закрити</button><button class="btn primary" type="button" data-pv-edit>${svg('note')}Редагувати</button></div>`,
     onMount: m => {
       hydratePhotos(m);
       m.addEventListener('click', e => {
         const t = e.target.closest('[data-pv]');
         if (t) { i = +t.dataset.pv; m.querySelector('.pv-main').innerHTML = photoImg(photos[i], 'pv-img', p.name); m.querySelectorAll('[data-pv]').forEach(b => { const on = +b.dataset.pv === i; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); hydratePhotos(m); return; }
-        if (e.target.closest('[data-pv-full]')) openGallery(p, i, () => productView(id, i));
+        if (e.target.closest('[data-pv-full]')) openGallery(p, i, back);
         else if (e.target.closest('[data-pv-sup]')) { closeModal(); ACTIONS['open-supplier']({ dataset: { id: p.supplierId } }); }
         else if (e.target.closest('[data-pv-edit]')) productForm(id, null, { backToView: true });
+        else if (e.target.closest('[data-pv-specs]')) productSpecsForm(id, back);
+        else if (e.target.closest('[data-pv-prices]')) productPricesForm(id, back);
+        else if (e.target.closest('[data-pv-retail]')) quickRetail(id, back);
+      });
+    } });
+}
+/** Зміна товару з перевіркою, що її справді записано (у хмарі зміни лишаються на пристрої й надсилаються повторно). */
+async function saveProduct(id, vals) {
+  await Repo.update('products', id, vals);
+  if (!Repo.status.cloud && Repo.status.lastError) throw new Error('браузер не зміг записати дані');
+}
+/** Повернення до перегляду після часткового редагування, якщо товар ще існує. */
+const backTo = (id, back) => (back ? () => { if (Repo.get('products', id)) back(); } : null);
+/** «Змінити» біля характеристик: артикул, розділ, підрозділ, розміри, кольори. */
+export function productSpecsForm(id, back) {
+  const p = Repo.get('products', id); if (!p) return;
+  const sections = D().settings.sections;
+  const catOpts = [['', '— без розділу —'], ...sections.map(x => [x.name, x.name]), ...(p.category && !sections.some(x => x.name === p.category) ? [[p.category, p.category]] : [])];
+  const subsOf = c => uniq([...(sections.find(x => x.name === c)?.subs || []), ...D().products.filter(x => x.category === c).map(x => x.subcategory).filter(Boolean)]);
+  formModal({
+    title: 'Характеристики',
+    fields: `<p class="full pv-ctx"><b>${esc(p.name)}</b></p>
+      ${F.text('sku', 'Артикул', p.sku)}
+      ${F.select('category', 'Розділ', p.category || '', catOpts)}
+      ${F.text('subcategory', 'Підрозділ', p.subcategory, { list: 'sub-list', ph: 'Напр.: махрові' })}<datalist id="sub-list"></datalist>
+      ${F.text('sizes', 'Розміри', p.sizes, { ph: 'Напр.: 36–40, S–XL' })}
+      ${F.text('colors', 'Кольори', p.colors, { ph: 'Напр.: чорний, бежевий', full: true })}`,
+    onMount: m => { const form = m.querySelector('form'); const subList = () => { m.querySelector('#sub-list').innerHTML = subsOf(form.category.value).map(x => `<option value="${esc(x)}">`).join(''); }; form.category.addEventListener('change', subList); subList(); },
+    read: fd => ({ errors: {}, values: { sku: g(fd, 'sku'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sizes: g(fd, 'sizes'), colors: g(fd, 'colors') } }),
+    onClose: backTo(id, back),
+    save: async vals => { await saveProduct(id, vals); toast('Характеристики збережено'); },
+  });
+}
+/* Ціни у формі: перемикач одиниця/упаковка і попередній розрахунок. */
+function priceFields(v) {
+  return `<div class="field full"><span class="lbl">Ціна закупівлі вказана</span><div class="seg" role="radiogroup"><label><input type="radio" name="priceType" value="unit" ${v.priceType !== 'pack' ? 'checked' : ''}>за одиницю</label><label><input type="radio" name="priceType" value="pack" ${v.priceType === 'pack' ? 'checked' : ''}>за упаковку</label></div></div>
+      ${F.money('purchasePrice', 'Ціна закупівлі, ₴', v.purchasePrice, { req: true })}
+      <div id="pack-wrap">${F.money('packQty', 'Одиниць в упаковці', v.packQty, { req: true })}</div>
+      ${F.money('retailPrice', 'Планова роздрібна ціна за одиницю, ₴', v.retailPrice)}
+      ${F.date('priceDate', 'Ціна актуальна на', v.priceDate)}
+      <div class="full calc-preview" id="calc-preview"></div>`;
+}
+function wirePriceFields(m) {
+  const form = m.querySelector('form');
+  const upd = () => {
+    const type = form.querySelector('[name=priceType]:checked').value;
+    m.querySelector('#pack-wrap').hidden = type !== 'pack';
+    const tmp = { priceType: type, purchasePrice: parseNum(form.purchasePrice.value), packQty: parseNum(form.packQty.value) };
+    const c = Calc.unitCost(tmp), r = parseNum(form.retailPrice.value);
+    m.querySelector('#calc-preview').innerHTML = `<div><span>Ціна одиниці</span><b>${fmtMoney(c)}</b></div><div><span>Різниця / од.</span><b>${isNum(Calc.diff(c, r)) ? signedMoney(Calc.diff(c, r)) : '—'}</b></div><div><span>Націнка</span><b>${fmtPct(Calc.markup(c, r))}</b></div><div><span>Маржа</span><b>${fmtPct(Calc.margin(c, r))}</b></div>`;
+  };
+  form.addEventListener('input', upd); form.addEventListener('change', upd); upd();
+}
+function readPrices(fd, errors) {
+  const type = fd.get('priceType') === 'pack' ? 'pack' : 'unit';
+  const purchasePrice = moneyField(fd, 'purchasePrice', errors, { required: true });
+  let packQty = null;
+  if (type === 'pack') { packQty = parseNum(fd.get('packQty')); if (packQty === null) errors.packQty = 'Вкажіть кількість одиниць.'; else if (Number.isNaN(packQty) || packQty <= 0) { errors.packQty = 'Має бути число більше нуля.'; packQty = null; } }
+  const retailPrice = moneyField(fd, 'retailPrice', errors);
+  return { priceType: type, purchasePrice, packQty, retailPrice, priceDate: dateField(fd, 'priceDate', errors) };
+}
+/** «Змінити ціни»: закупівля (за одиницю чи упаковку), роздріб і дата ціни. Різниця, маржа й націнка рахуються самі. */
+export function productPricesForm(id, back) {
+  const p = Repo.get('products', id); if (!p) return;
+  formModal({
+    title: 'Ціни товару',
+    fields: `<p class="full pv-ctx"><b>${esc(p.name)}</b></p>${priceFields(p)}`,
+    onMount: wirePriceFields,
+    read: fd => { const errors = {}; const values = readPrices(fd, errors); return { errors, values }; },
+    onClose: backTo(id, back),
+    save: async vals => { await saveProduct(id, vals); toast('Ціни збережено'); },
+  });
+}
+/** Швидке введення роздрібної ціни з картки, рядка списку чи перегляду товару. */
+export function quickRetail(id, back) {
+  const p = Repo.get('products', id); if (!p) return;
+  const cost = Calc.unitCost(p);
+  openModal({ title: 'Роздрібна ціна', narrow: true, onClose: backTo(id, back),
+    body: `<form class="modal-b quick-retail" id="quick-retail" novalidate>
+      <div class="qr-ctx"><b>${esc(p.name)}</b><span>Закупівля за одиницю: ${isNum(cost) ? `<b>${fmtMoney(cost)}</b>` : '<span class="muted">не задано</span>'}${p.priceType === 'pack' && isNum(cost) ? ` <span class="muted">(${fmtMoney(p.purchasePrice)} за уп. ${fmtNum(p.packQty)} шт)</span>` : ''}</span></div>
+      <label class="field"><span class="lbl">Роздрібна ціна за одиницю, ₴</span><input class="input" name="retail" inputmode="decimal" autocomplete="off" value="${isNum(p.retailPrice) ? String(p.retailPrice).replace('.', ',') : ''}" placeholder="Напр.: 249" aria-describedby="qr-msg"></label>
+      <div class="qr-msg" id="qr-msg" aria-live="polite"></div>
+    </form>`,
+    foot: `<div class="modal-f"><button class="btn" type="button" data-close>Скасувати</button><button class="btn primary" type="submit" form="quick-retail">Зберегти</button></div>`,
+    onMount: m => {
+      const form = m.querySelector('form'), inp = form.retail, msg = m.querySelector('#qr-msg'), btn = m.querySelector('[type=submit]');
+      const show = (cls, html) => { msg.className = 'qr-msg ' + cls; msg.innerHTML = html; };
+      const check = () => {
+        inp.classList.remove('bad');
+        const n = parseNum(inp.value);
+        if (n === null || Number.isNaN(n) || n < 0) return show('', '');
+        if (!isNum(cost)) return show('', '');
+        const d = n - cost, mg = Calc.margin(cost, n);
+        const line = `Різниця / од.: <b>${signedMoney(d)}</b>${isNum(mg) ? ` · маржа <b>${signedPct(mg)}</b>` : ''}`;
+        if (d < 0) show('warn', `Роздріб нижчий за закупівлю на ${fmtMoney(-d)}. Таку ціну можна зберегти, але кожна продана одиниця буде збитковою.<br>${line}`);
+        else show(d > 0 ? 'ok' : '', line);
+      };
+      inp.addEventListener('input', check); check();
+      inp.select();
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const n = parseNum(inp.value);
+        const err = n === null ? 'Поле порожнє. Вкажіть ціну числом (0 теж можна) або натисніть «Скасувати».' : Number.isNaN(n) ? 'Введіть число, наприклад 249 або 249,50.' : n < 0 ? 'Ціна не може бути від’ємною.' : '';
+        if (err) { inp.classList.add('bad'); show('bad', err); inp.focus(); return; }
+        btn.disabled = true; btn.textContent = 'Збереження…';
+        try {
+          await saveProduct(id, { retailPrice: n });
+          toast('Роздрібну ціну збережено'); closeModal();
+        } catch (ex) {
+          btn.disabled = false; btn.textContent = 'Зберегти';
+          show('bad', `Не вдалося зберегти ціну${ex?.message ? `: ${esc(ex.message)}` : ''}. Введене значення залишилось, спробуйте ще раз.`);
+        }
       });
     } });
 }
