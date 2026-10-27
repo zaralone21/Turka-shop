@@ -1358,3 +1358,47 @@ details[open]::details-content { height: auto; }
 .chat-form .chat-attach.disabled { opacity: .45; pointer-events: none; }
 .msg-atts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .msg-atts .msg-att { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+
+/* Знижка постачальника в закупівлі */
+.pur-sum { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.pur-sum .pay { background: var(--primary); }
+.pur-sum .pay span, .pur-sum .pay b { color: var(--on-primary); }
+.pur-sum-note { margin: 6px 0 0; }
+.pur-sum-note:empty { display: none; }
+.pur-lines { margin-top: 8px; }
+.pur-lines summary { cursor: pointer; font-size: .85rem; font-weight: 550; padding: 4px 0; }
+.pur-lines .t td, .pur-lines .t th { font-size: .82rem; }
+.pur-lines .t tr.sum td { font-weight: 600; border-top: 1px solid var(--line); }
+.pur-lines .bad { color: var(--danger); }
+.pur-was { display: block; }
+.pur-was s { opacity: .8; }
+/* Вибір товарів постачальника за розділами у формі закупівлі */
+.pick-box { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; background: var(--surface); }
+.pick-box > summary { cursor: pointer; font-weight: 550; padding: 4px 0; }
+.pick-box[open] > summary { margin-bottom: 8px; }
+.pick-box .search { margin: 6px 0; }
+.pick-list { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
+.pick-list .li .t { display: flex; flex-direction: column; }
+/* Розділи товарів у картці постачальника */
+.sup-sec-nav { margin-bottom: 8px; }
+.sup-sec-tools { margin-bottom: 10px; }
+.sup-sec-tools .search { flex: 1 1 240px; }
+.sup-sec-group + .sup-sec-group { margin-top: 16px; }
+.sup-sec-h { font-size: .95rem; margin: 0 0 8px; }
+.ss-row { gap: 8px; }
+.ss-row .input { flex: 1 1 auto; min-width: 0; }
+.ss-row .ss-n { flex: none; white-space: nowrap; }
+.ss-acts { flex: none; gap: 2px; flex-wrap: nowrap; }
+.ss-add { margin-top: 10px; flex-wrap: nowrap; }
+.ss-add .input { flex: 1 1 auto; min-width: 0; }
+.mv-head { justify-content: space-between; margin-top: 4px; }
+.mv-list { max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
+.mv-row { justify-content: flex-start; cursor: pointer; }
+.mv-row input { flex: none; width: 18px; height: 18px; }
+.mv-row .t { display: flex; flex-direction: column; }
+@media (max-width: 480px) {
+  .ss-row { flex-wrap: wrap; }
+  .ss-row .input { flex-basis: 100%; }
+  .ss-row .ss-n { flex: 1; }
+}
+.modal .pick-box .search .input { padding-left: 39px; }

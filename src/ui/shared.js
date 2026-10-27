@@ -37,7 +37,7 @@ export function resolvePage(id) {
 export const UI = {
   page: 'home', lastTab: {}, supplierId: null, premisesId: null, regroupHidden: false, keepScroll: true, aiOpen: false, chatId: null,
   openCl: new Set(),
-  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', prodQuick: '', supCat: '', fitCat: '', fitStatus: '', noteQ: '', noteTag: '', taskStatus: '', taskPrio: '', purStatus: '', remShowDone: false },
+  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', prodQuick: '', supCat: '', fitCat: '', fitStatus: '', noteQ: '', noteTag: '', taskStatus: '', taskPrio: '', purStatus: '', remShowDone: false, supSec: '', supSecFor: '', supProdQ: '' },
 };
 export const root = document.getElementById('root');
 export const D = () => Repo.data;

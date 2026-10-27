@@ -84,12 +84,17 @@ const salesPlan = v => (v && typeof v === 'object' && !Array.isArray(v))
 const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
   const files = v => Array.isArray(v) ? v.filter(f => f && typeof f === 'object' && typeof f.path === 'string' && FILE_PATH.test(f.path))
     .map(f => ({ id: str(f.id) || uid(), path: f.path, name: str(f.name).slice(0, 200) || 'файл', type: str(f.type).slice(0, 100), size: numOrNull(f.size), kind: f.kind === 'doc' ? 'doc' : f.kind === 'measure' ? 'measure' : 'photo' })).slice(0, 60) : [];
+  /* Розділи товарів усередині постачальника: [{id, name}], назви унікальні без урахування регістру. */
+  const supSections = v => { const seen = new Set(), ids = new Set(); return (Array.isArray(v) ? v : []).filter(x => x && typeof x === 'object').map(x => ({ id: str(x.id).slice(0, 60) || 'ss-' + uid().slice(0, 8), name: str(x.name).trim().slice(0, 60) }))
+    .filter(x => x.name && !seen.has(x.name.toLowerCase()) && !ids.has(x.id) && seen.add(x.name.toLowerCase()) && ids.add(x.id)).slice(0, 100); };
+  /** Знижка постачальника, %: від 0 до 100, дробова; некоректне значення — 0. */
+  const pct = v => { const n = parseNum(v); return isNum(n) && n > 0 ? Math.min(Math.round(n * 100) / 100, 100) : 0; };
   const pick = (v, map, def) => Object.prototype.hasOwnProperty.call(map, v) ? v : def;
 
   /* Нормалізатори зберігають невідомі поля (...x), щоб нові версії не втрачали дані. */
   const N = {
-    suppliers: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categories: strArr(x.categories), instagram: str(x.instagram), website: str(x.website), phone: str(x.phone), messenger: str(x.messenger), contactPerson: str(x.contactPerson), city: str(x.city), minOrder: str(x.minOrder), paymentTerms: str(x.paymentTerms), deliveryTerms: str(x.deliveryTerms), defectTerms: str(x.defectTerms), notes: str(x.notes), status: pick(x.status, SUPPLIER_STATUSES, 'interested'), checkedAt: date(x.checkedAt), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
-    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), subcategory: str(x.subcategory), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    suppliers: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categories: strArr(x.categories), instagram: str(x.instagram), website: str(x.website), phone: str(x.phone), messenger: str(x.messenger), contactPerson: str(x.contactPerson), city: str(x.city), minOrder: str(x.minOrder), paymentTerms: str(x.paymentTerms), deliveryTerms: str(x.deliveryTerms), defectTerms: str(x.defectTerms), notes: str(x.notes), sections: supSections(x.sections), status: pick(x.status, SUPPLIER_STATUSES, 'interested'), checkedAt: date(x.checkedAt), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), subcategory: str(x.subcategory), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, supplierSectionId: x.supplierId && x.supplierSectionId ? str(x.supplierSectionId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     notes: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), body: str(x.body), tags: strArr(x.tags), pinned: !!x.pinned, supplierId: x.supplierId ? str(x.supplierId) : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     tasks: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), description: str(x.description), prep: !!x.prep, deadline: date(x.deadline), priority: pick(x.priority, PRIORITIES, 'medium'), status: pick(x.status, TASK_STATUSES, 'planned'), checklist: Array.isArray(x.checklist) ? x.checklist.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), text: str(i.text), done: !!i.done })).filter(i => i.text) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     expenses: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categoryId: str(x.categoryId) || 'other', planned: numOrNull(x.planned), paid: numOrNull(x.paid), dueDate: date(x.dueDate), comment: str(x.comment), source: link(x.source), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
@@ -108,7 +113,7 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
     purchases: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), supplierId: x.supplierId ? str(x.supplierId) : null, status: pick(x.status, PURCHASE_STATUSES, 'planned'), expectedDate: date(x.expectedDate),
       firstPurchase: !!x.firstPurchase,
       items: Array.isArray(x.items) ? x.items.filter(i => i && typeof i === 'object').map(i => ({ ...i, id: str(i.id) || uid(), productId: i.productId ? str(i.productId) : null, name: str(i.name), qty: numOrNull(i.qty), unitPrice: numOrNull(i.unitPrice), retailPrice: numOrNull(i.retailPrice) })).filter(i => i.name || i.productId) : [],
-      deliveryCost: numOrNull(x.deliveryCost), expenseId: x.expenseId ? str(x.expenseId) : null, comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+      deliveryCost: numOrNull(x.deliveryCost), discountPct: pct(x.discountPct), expenseId: x.expenseId ? str(x.expenseId) : null, comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     reminders: x => { const r = { ...x, id: str(x.id) || uid(), title: str(x.title), note: str(x.note), date: date(x.date), time: /^\d{2}:\d{2}$/.test(x.time || '') ? x.time : '09:00', repeat: pick(x.repeat, REPEATS, 'none'), status: pick(x.status, REMINDER_STATUSES, 'planned'),
       snoozedUntil: x.snoozedUntil && !isNaN(new Date(x.snoozedUntil)) ? x.snoozedUntil : null, link: x.link && LINK_TYPES[x.link.type] && x.link.id ? { type: x.link.type, id: str(x.link.id) } : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) };
       r.fireAt = fireAt(r); return r; },
@@ -143,6 +148,9 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
     out.expenses.forEach(e => { if (!catIds.has(e.categoryId)) e.categoryId = 'other'; });
     const supIds = new Set(out.suppliers.map(s => s.id));
     [...out.products, ...out.notes, ...out.purchases].forEach(r => { if (r.supplierId && !supIds.has(r.supplierId)) r.supplierId = null; });
+    // Розділ постачальника, якого вже немає (або товар перейшов до іншого постачальника), — «Без розділу».
+    const secIds = new Map(out.suppliers.map(s => [s.id, new Set(s.sections.map(x => x.id))]));
+    out.products.forEach(p => { if (p.supplierSectionId && !secIds.get(p.supplierId)?.has(p.supplierSectionId)) p.supplierSectionId = null; });
     return out;
   }
 

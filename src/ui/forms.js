@@ -3,9 +3,10 @@ import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
 import { freeExpensesForPurchase, purchaseAmount, purchaseLink } from '../core/opening.js';
 import { planRegroup, sectionsToText, textToSections } from '../core/sections.js';
+import { SEC_ALL, SEC_NONE, filterBySection, sectionCounts, sectionIdOf, sectionsOf } from '../core/supplierSections.js';
 import { once, syncExpensePlanned } from './budgetSync.js';
 import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core/reminders.js';
-import { esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, signedMoney, signedPct, splitList, todayISO, uid, uniq } from '../core/utils.js';
+import { discText, esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, signedMoney, signedPct, splitList, todayISO, uid, uniq } from '../core/utils.js';
 import { ACTIONS } from './events.js';
 import { F, closeModal, confirmDialog, dateField, formModal, g, moneyField, openModal, supplierOptions } from './modal.js';
 import { LOCAL_BYTES, MAX_PHOTOS, dataBytes, deletePhotos, hydratePhotos, photoImg, savePhoto } from './photos.js';
@@ -97,9 +98,9 @@ export async function regroupDialog() {
 }
 
 /* --- товар --- */
-export function productForm(id, presetSupplier, { backToView } = {}) {
+export function productForm(id, presetSupplier, { backToView, section } = {}) {
   const p = id ? Repo.get('products', id) : null;
-  const v = p || { priceType: 'unit', priceDate: todayISO(), supplierId: presetSupplier || '' };
+  const v = p || { priceType: 'unit', priceDate: todayISO(), supplierId: presetSupplier || '', supplierSectionId: section || null };
   const sections = D().settings.sections;
   const catOpts = [['', '— без розділу —'], ...sections.map(x => [x.name, x.name]), ...(v.category && !sections.some(x => x.name === v.category) ? [[v.category, v.category]] : [])];
   const subsOf = c => uniq([...(sections.find(x => x.name === c)?.subs || []), ...D().products.filter(x => x.category === c).map(x => x.subcategory).filter(Boolean)]);
@@ -112,6 +113,7 @@ export function productForm(id, presetSupplier, { backToView } = {}) {
       ${F.text('subcategory', 'Підрозділ', v.subcategory, { list: 'sub-list', ph: 'Напр.: махрові' })}<datalist id="sub-list"></datalist>
       ${F.text('sku', 'Артикул', v.sku)}
       ${F.select('supplierId', 'Постачальник', v.supplierId || '', supplierOptions())}
+      ${supSectionField(v)}
       ${F.text('url', 'Посилання на товар', v.url, { ph: 'https://…' })}
       ${F.text('sizes', 'Розміри', v.sizes, { ph: 'Напр.: 36–40, S–XL' })}
       ${F.text('colors', 'Кольори', v.colors, { ph: 'Напр.: чорний, бежевий' })}
@@ -122,6 +124,7 @@ export function productForm(id, presetSupplier, { backToView } = {}) {
     onMount: m => {
       const form = m.querySelector('form');
       wirePhotoEditor(m.querySelector('#photo-edit'), ph);
+      wireSupSection(form);
       const subList = () => { m.querySelector('#sub-list').innerHTML = subsOf(form.category.value).map(x => `<option value="${esc(x)}">`).join(''); };
       form.category.addEventListener('change', subList); subList();
       wirePriceFields(m);
@@ -129,7 +132,7 @@ export function productForm(id, presetSupplier, { backToView } = {}) {
     read: fd => {
       const errors = {}; if (!g(fd, 'name')) errors.name = 'Вкажіть назву.';
       const prices = readPrices(fd, errors);
-      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), ...prices, comment: g(fd, 'comment') } };
+      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, supplierSectionId: readSupSection(fd), url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), ...prices, comment: g(fd, 'comment') } };
     },
     onDelete: p ? () => { deleting = true; ACTIONS['del-product']({ dataset: { id: p.id } }); } : null,
     // З перегляду: і «Зберегти», і «Скасувати» повертають до (оновленого) перегляду товару.
@@ -153,6 +156,23 @@ export function productForm(id, presetSupplier, { backToView } = {}) {
       if (ph.removed.length) deletePhotos(ph.removed);
     },
   });
+}
+/* Розділ товару всередині постачальника: варіанти залежать від вибраного постачальника. */
+const supSectionOpts = (supId, sel) => { const s = supId && Repo.get('suppliers', supId); return [['', 'Без розділу'], ...sectionsOf(s).map(x => [x.id, x.name])].map(([k, t]) => `<option value="${esc(k)}" ${k === (sel || '') ? 'selected' : ''}>${esc(t)}</option>`).join(''); };
+const supSectionHint = supId => { const s = supId && Repo.get('suppliers', supId); return !s ? 'Спершу виберіть постачальника.' : sectionsOf(s).length ? `Розділи постачальника «${esc(s.name)}».` : 'У постачальника ще немає розділів: їх можна створити в його картці.'; };
+function supSectionField(v) {
+  const s = v.supplierId && Repo.get('suppliers', v.supplierId);
+  const sel = s ? sectionIdOf({ ...v, supplierId: s.id }, s) : null;
+  return `<label class="field"><span class="lbl">Розділ у постачальника</span><select class="input" id="fld-supplierSectionId" name="supplierSectionId" ${s ? '' : 'disabled'}>${supSectionOpts(v.supplierId, sel)}</select><span class="hint" id="sup-sec-hint">${supSectionHint(v.supplierId)}</span></label>`;
+}
+function wireSupSection(form) {
+  const sup = form.supplierId, sel = form.supplierSectionId; if (!sup || !sel) return;
+  sup.addEventListener('change', () => { sel.innerHTML = supSectionOpts(sup.value, ''); sel.disabled = !sup.value; form.querySelector('#sup-sec-hint').innerHTML = supSectionHint(sup.value); });
+}
+/** Розділ постачальника з форми: лише з розділів вибраного постачальника. */
+function readSupSection(fd) {
+  const supId = g(fd, 'supplierId'), id = g(fd, 'supplierSectionId'); const s = supId && Repo.get('suppliers', supId);
+  return s && id && sectionsOf(s).some(x => x.id === id) ? id : null;
 }
 /* Фото у формі товару: показ наявних, позначка на видалення (діє після «Зберегти»), додавання нових. */
 function wirePhotoEditor(box, ph) {
@@ -194,7 +214,7 @@ export function productView(id, start = 0) {
   const tone = v => isNum(v) && v < 0 ? ' class="bad"' : '';
   const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   const sup = p.supplierId ? Repo.get('suppliers', p.supplierId) : null;
-  const known = new Set(['id', 'name', 'category', 'subcategory', 'sku', 'supplierId', 'url', 'sizes', 'colors', 'priceType', 'purchasePrice', 'packQty', 'retailPrice', 'priceDate', 'comment', 'photos', 'createdAt', 'updatedAt']);
+  const known = new Set(['id', 'name', 'category', 'subcategory', 'sku', 'supplierId', 'supplierSectionId', 'unit', 'url', 'sizes', 'colors', 'priceType', 'purchasePrice', 'packQty', 'retailPrice', 'priceDate', 'comment', 'photos', 'createdAt', 'updatedAt']);
   const extra = Object.entries(p).filter(([k, v]) => !known.has(k) && (typeof v === 'string' ? v.trim() : typeof v === 'number' || typeof v === 'boolean'));
   const href = p.url ? (/^https?:\/\//i.test(p.url) ? p.url : 'https://' + p.url) : '';
   const gallery = photos.length ? `<div class="pv-photo"><button type="button" class="pv-main" data-pv-full aria-label="Збільшити фото">${photoImg(photos[i], 'pv-img', p.name)}</button>
@@ -216,6 +236,7 @@ export function productView(id, start = 0) {
       ${row('Розміри', p.sizes ? esc(p.sizes) : none)}
       ${row('Кольори', p.colors ? esc(p.colors) : none)}
       ${row('Постачальник', sup ? `<button type="button" class="btn link" data-pv-sup>${esc(sup.name)}</button>` : none)}
+      ${sup ? row('Розділ у постачальника', (() => { const sid = sectionIdOf(p, sup); return sid ? esc(sectionsOf(sup).find(x => x.id === sid).name) : '<span class="muted">Без розділу</span>'; })()) : ''}
       ${extra.map(([k, v]) => row(esc(k), esc(typeof v === 'boolean' ? (v ? 'так' : 'ні') : String(v)))).join('')}
     </dl>
     ${href ? `<a class="pv-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Відкрити у постачальника ↗</a>` : ''}</section>
@@ -271,10 +292,11 @@ export function productSpecsForm(id, back) {
       ${F.text('sku', 'Артикул', p.sku)}
       ${F.select('category', 'Розділ', p.category || '', catOpts)}
       ${F.text('subcategory', 'Підрозділ', p.subcategory, { list: 'sub-list', ph: 'Напр.: махрові' })}<datalist id="sub-list"></datalist>
+      ${p.supplierId && Repo.get('suppliers', p.supplierId) ? `<label class="field"><span class="lbl">Розділ у постачальника</span><select class="input" name="supplierSectionId">${supSectionOpts(p.supplierId, sectionIdOf(p, Repo.get('suppliers', p.supplierId)))}</select><span class="hint">${supSectionHint(p.supplierId)}</span></label>` : ''}
       ${F.text('sizes', 'Розміри', p.sizes, { ph: 'Напр.: 36–40, S–XL' })}
       ${F.text('colors', 'Кольори', p.colors, { ph: 'Напр.: чорний, бежевий', full: true })}`,
     onMount: m => { const form = m.querySelector('form'); const subList = () => { m.querySelector('#sub-list').innerHTML = subsOf(form.category.value).map(x => `<option value="${esc(x)}">`).join(''); }; form.category.addEventListener('change', subList); subList(); },
-    read: fd => ({ errors: {}, values: { sku: g(fd, 'sku'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sizes: g(fd, 'sizes'), colors: g(fd, 'colors') } }),
+    read: fd => { fd.set('supplierId', p.supplierId || ''); return { errors: {}, values: { sku: g(fd, 'sku'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', ...(p.supplierId ? { supplierSectionId: readSupSection(fd) } : {}), sizes: g(fd, 'sizes'), colors: g(fd, 'colors') } }; },
     onClose: backTo(id, back),
     save: async vals => { await saveProduct(id, vals); toast('Характеристики збережено'); },
   });
@@ -461,13 +483,38 @@ export function budgetCatsModal() {
 }
 
 /* --- закупівля --- */
+const num = v => (isNum(v) ? String(v).replace('.', ',') : '');
+/** Блок підсумку закупівлі: товари, знижка, до оплати та собівартість позицій зі знижкою. */
+export function purchaseSummaryHtml(p) {
+  const t = Calc.purchaseLines(p);
+  const cell = (k, v, cls = '') => `<div class="${cls}"><span>${k}</span><b>${v}</b></div>`;
+  const tiles = `<div class="calc-preview pur-sum">${cell('Сума товарів', fmtMoney(t.goods))}${cell('Знижка, %', discText(t.discountPct))}${cell('Сума знижки, грн', t.discount ? '−' + fmtMoney(t.discount) : fmtMoney(0))}${t.delivery ? cell('Доставка', fmtMoney(t.delivery)) : ''}${cell('До оплати', fmtMoney(t.total), 'pay')}</div>`;
+  const note = `<p class="small muted pur-sum-note">${t.discountPct ? `Товари зі знижкою: ${fmtMoney(t.items)}. ` : ''}${t.delivery ? 'Доставка додається після знижки, на неї знижка не діє. ' : ''}${t.missing.length ? `${t.missing.length} ${plural(t.missing.length, 'позиція', 'позиції', 'позицій')} без ціни або кількості не входять у суму.` : ''}</p>`;
+  const withRetail = t.lines.some(l => isNum(l.retailPrice));
+  if (!t.lines.length || (!t.discountPct && !withRetail)) return tiles + note;
+  const rev = t.lines.reduce((a, l) => a + (l.revenue ?? 0), 0), costR = t.lines.filter(l => isNum(l.revenue)).reduce((a, l) => a + l.net, 0);
+  const rows = t.lines.map(l => `<tr><td>${esc(l.name || 'Позиція')}</td><td class="num">${fmtNum(l.qty)}</td><td class="num">${fmtMoney(l.unitPrice)}</td>${t.discountPct ? `<td class="num">${fmtMoney(l.unitNet)}</td>` : ''}<td class="num">${fmtMoney(l.net)}</td><td class="num hide-m">${isNum(l.margin) ? `<span class="${l.margin < 0 ? 'bad' : ''}">${signedPct(l.margin)}</span>` : '—'}</td></tr>`).join('');
+  const sumRow = `<tr class="sum"><td>Разом</td><td></td><td></td>${t.discountPct ? '<td></td>' : ''}<td class="num">${fmtMoney(t.items)}</td><td class="num hide-m">${rev > 0 ? signedPct(Calc.margin(costR, rev)) : '—'}</td></tr>`;
+  return tiles + note + `<details class="pur-lines" ${t.discountPct ? 'open' : ''}><summary>Собівартість позицій${t.discountPct ? ' зі знижкою' : ''}</summary><div class="table-wrap"><table class="t"><thead><tr><th>Позиція</th><th class="num">К-сть</th><th class="num">Ціна / од.</th>${t.discountPct ? '<th class="num">Зі знижкою / од.</th>' : ''}<th class="num">Сума${t.discountPct ? ' зі знижкою' : ''}</th><th class="num hide-m">Маржа</th></tr></thead><tbody>${rows}${sumRow}</tbody></table></div>
+    ${rev > 0 ? `<p class="small muted" style="margin:6px 0 0">Потенційна виручка за роздрібними цінами: ${fmtMoney(rev)}. Різниця з товарами зі знижкою: ${signedMoney(rev - costR)}${t.delivery ? `, з доставкою: ${signedMoney(rev - costR - t.delivery)}` : ''}. Знижка розподілена між позиціями пропорційно їхній вартості, початкові ціни збережено.</p>` : ''}</details>`;
+}
 export function purchaseForm(id, preset = {}) {
   const p = id ? Repo.get('purchases', id) : null;
-  const v = p || { status: 'planned', items: [], supplierId: preset.supplierId || '', title: preset.title || '', firstPurchase: !!preset.firstPurchase };
-  const products = () => D().products;
-  const prodOptions = sel => `<option value="">— вільна позиція —</option>${[...products()].sort((a, b) => (a.name > b.name ? 1 : -1)).map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}${x.supplierId ? ' · ' + esc(Repo.get('suppliers', x.supplierId)?.name || '') : ''}</option>`).join('')}`;
-  const row = i => `<div class="r" data-item="${esc(i.id)}"><div class="field" style="gap:4px"><select class="input" data-i-prod aria-label="Товар">${prodOptions(i.productId)}</select><input class="input" data-i-name placeholder="Назва позиції" value="${esc(i.name || '')}" aria-label="Назва позиції" ${i.productId ? 'hidden' : ''}></div>
-    <input class="input num" data-i-qty inputmode="decimal" placeholder="шт" value="${isNum(i.qty) ? String(i.qty).replace('.', ',') : ''}" aria-label="Кількість одиниць"><input class="input num" data-i-price inputmode="decimal" placeholder="Закупівля ₴" value="${isNum(i.unitPrice) ? String(i.unitPrice).replace('.', ',') : ''}" aria-label="Ціна за одиницю"><input class="input num" data-i-retail inputmode="decimal" placeholder="Роздріб ₴" value="${isNum(i.retailPrice) ? String(i.retailPrice).replace('.', ',') : ''}" aria-label="Роздрібна ціна за одиницю"><button type="button" class="btn sm ghost" data-i-del aria-label="Видалити позицію">✕</button></div>`;
+  const v = p || { status: 'planned', items: [], supplierId: preset.supplierId || '', title: preset.title || '', firstPurchase: !!preset.firstPurchase, discountPct: 0 };
+  const pick = { sec: SEC_ALL, q: '' };
+  const supOf = () => { const id2 = document.getElementById('fld-supplierId')?.value; return id2 ? Repo.get('suppliers', id2) : null; };
+  /** Варіанти товару: товари вибраного постачальника згруповано за його розділами, решта — окремою групою. */
+  const prodOptions = (sel, sup) => {
+    const all = [...D().products].sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+    const opt = x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}${x.supplierId && (!sup || x.supplierId !== sup.id) ? ' · ' + esc(Repo.get('suppliers', x.supplierId)?.name || '') : ''}</option>`;
+    if (!sup) return `<option value="">— вільна позиція —</option>${all.map(opt).join('')}`;
+    const own = all.filter(x => x.supplierId === sup.id), other = all.filter(x => x.supplierId !== sup.id);
+    const groups = [...sectionsOf(sup).map(x => [x.name, own.filter(o => sectionIdOf(o, sup) === x.id)]), [sectionsOf(sup).length ? 'Без розділу' : sup.name, own.filter(o => !sectionIdOf(o, sup))], ['Інші постачальники', other]].filter(([, l]) => l.length);
+    return `<option value="">— вільна позиція —</option>${groups.map(([name, l]) => `<optgroup label="${esc(name)}">${l.map(opt).join('')}</optgroup>`).join('')}`;
+  };
+  const row = (i, sup) => `<div class="r" data-item="${esc(i.id)}"><div class="field" style="gap:4px"><select class="input" data-i-prod aria-label="Товар">${prodOptions(i.productId, sup)}</select><input class="input" data-i-name placeholder="Назва позиції" value="${esc(i.name || '')}" aria-label="Назва позиції" ${i.productId ? 'hidden' : ''}></div>
+    <input class="input num" data-i-qty inputmode="decimal" placeholder="шт" value="${num(i.qty)}" aria-label="Кількість одиниць"><input class="input num" data-i-price inputmode="decimal" placeholder="Закупівля ₴" value="${num(i.unitPrice)}" aria-label="Ціна за одиницю"><input class="input num" data-i-retail inputmode="decimal" placeholder="Роздріб ₴" value="${num(i.retailPrice)}" aria-label="Роздрібна ціна за одиницю"><button type="button" class="btn sm ghost" data-i-del aria-label="Видалити позицію">✕</button></div>`;
+  const sup0 = v.supplierId ? Repo.get('suppliers', v.supplierId) : null;
   formModal({
     title: p ? 'Закупівля' : 'Нова закупівля', wide: true,
     fields: `${F.text('title', 'Назва', v.title, { req: true, full: true, ph: 'Напр.: Перша партія шкарпеток' })}
@@ -475,33 +522,74 @@ export function purchaseForm(id, preset = {}) {
       ${F.select('status', 'Статус', v.status, Object.entries(Schema.PURCHASE_STATUSES))}
       ${F.date('expectedDate', 'Очікувана дата', v.expectedDate)}
       ${F.money('deliveryCost', 'Доставка, ₴', v.deliveryCost)}
+      ${F.money('discountPct', 'Знижка постачальника, %', v.discountPct || 0, { hint: 'Від 0 до 100, на всю суму товарів. На доставку не діє.' })}
       <label class="check full"><input type="checkbox" name="firstPurchase" ${v.firstPurchase ? 'checked' : ''}> Перша закупівля до відкриття</label>
-      <div class="field full"><span class="lbl">Позиції</span><div class="items-head buying-head"><span>Товар</span><span>К-сть</span><span>Закупівля, ₴</span><span>Роздріб, ₴</span><span></span></div><div class="items-edit buying-edit" id="items-edit">${v.items.map(row).join('')}</div><div><button type="button" class="btn sm" id="item-add">+ Додати позицію</button></div><span class="hint">Ціни підставляються з картки товару під час вибору. Їх можна змінити для цієї закупівлі; каталог не зміниться.</span></div>
-      <div class="full calc-preview" id="pur-preview"></div>
+      <div class="full pur-pick" id="pur-pick"></div>
+      <div class="field full"><span class="lbl">Позиції</span><div class="items-head buying-head"><span>Товар</span><span>К-сть</span><span>Закупівля, ₴</span><span>Роздріб, ₴</span><span></span></div><div class="items-edit buying-edit" id="items-edit">${v.items.map(i => row(i, sup0)).join('')}</div><div><button type="button" class="btn sm" id="item-add">+ Додати позицію</button></div><span class="hint">Ціни підставляються з картки товару під час вибору. Їх можна змінити для цієї закупівлі; каталог не зміниться. Знижка застосовується до суми товарів, ціни позицій лишаються початковими.</span></div>
+      <div class="full" id="pur-preview" aria-live="polite"></div>
       <div class="full small muted" id="pur-minorder"></div>
       ${F.area('comment', 'Коментар', v.comment, { rows: 2 })}`,
     onMount: m => {
       const box = m.querySelector('#items-edit'), form = m.querySelector('form');
-      const read = () => [...box.querySelectorAll('[data-item]')].map(r => ({ id: r.dataset.item, productId: r.querySelector('[data-i-prod]').value || null, name: r.querySelector('[data-i-name]').value.trim(), qty: parseNum(r.querySelector('[data-i-qty]').value), unitPrice: parseNum(r.querySelector('[data-i-price]').value) }));
+      const read = () => [...box.querySelectorAll('[data-item]')].map(r => { const pid = r.querySelector('[data-i-prod]').value || null; return { id: r.dataset.item, productId: pid, name: pid ? (Repo.get('products', pid)?.name || '') : r.querySelector('[data-i-name]').value.trim(), qty: parseNum(r.querySelector('[data-i-qty]').value), unitPrice: parseNum(r.querySelector('[data-i-price]').value), retailPrice: parseNum(r.querySelector('[data-i-retail]').value) }; });
+      const clean = x => (isNum(x) ? x : null);
       const upd = () => {
-        const items = read().map(i => ({ ...i, qty: isNum(i.qty) ? i.qty : null, unitPrice: isNum(i.unitPrice) ? i.unitPrice : null }));
-        const t = Calc.purchaseTotal({ items, deliveryCost: parseNum(form.deliveryCost.value) });
-        m.querySelector('#pur-preview').innerHTML = `<div><span>Товари</span><b>${fmtMoney(t.items)}</b></div><div><span>Доставка</span><b>${fmtMoney(t.delivery)}</b></div><div><span>Разом</span><b>${fmtMoney(t.total)}</b></div>`;
-        const sup = form.supplierId.value && Repo.get('suppliers', form.supplierId.value);
+        const items = read().map(i => ({ ...i, qty: clean(i.qty), unitPrice: clean(i.unitPrice), retailPrice: clean(i.retailPrice) }));
+        const pct = parseNum(form.discountPct.value);
+        m.querySelector('#pur-preview').innerHTML = purchaseSummaryHtml({ items, deliveryCost: parseNum(form.deliveryCost.value), discountPct: isNum(pct) && pct >= 0 && pct <= 100 ? pct : 0 })
+          + (isNum(pct) && pct >= 0 && pct <= 100 || form.discountPct.value.trim() === '' ? '' : '<p class="small" style="color:var(--danger);margin:4px 0 0">Знижка має бути числом від 0 до 100.</p>');
+        const sup = supOf();
         m.querySelector('#pur-minorder').textContent = sup ? (sup.minOrder ? `Мінімальне замовлення в «${sup.name}»: ${sup.minOrder}.` : `Мінімальне замовлення «${sup.name}» не записане.`) + (sup.deliveryTerms ? ` Доставка: ${sup.deliveryTerms}.` : '') : '';
       };
-      m.querySelector('#item-add').onclick = () => { box.insertAdjacentHTML('beforeend', row({ id: uid() })); upd(); };
-      box.addEventListener('click', e => { const b = e.target.closest('[data-i-del]'); if (b) { b.closest('[data-item]').remove(); upd(); } });
+      const fill = (r, prod) => {
+        r.querySelector('[data-i-name]').hidden = !!prod;
+        if (!prod) return;
+        const c = Calc.unitCost(prod); r.querySelector('[data-i-name]').value = prod.name;
+        if (isNum(c)) r.querySelector('[data-i-price]').value = num(Math.round(c * 100) / 100);
+        r.querySelector('[data-i-retail]').value = num(prod.retailPrice);
+      };
+      /* Вибір товарів постачальника за його розділами. */
+      const drawPick = () => {
+        const el = m.querySelector('#pur-pick'), sup = supOf();
+        const own = sup ? D().products.filter(x => x.supplierId === sup.id).sort((a, b) => a.name.localeCompare(b.name, 'uk')) : [];
+        if (!own.length) { el.innerHTML = ''; return; }
+        if (pick.sec !== SEC_ALL && pick.sec !== SEC_NONE && !sectionsOf(sup).some(x => x.id === pick.sec)) pick.sec = SEC_ALL;
+        const counts = sectionCounts(own, sup), list = filterBySection(own, sup, pick.sec, pick.q);
+        const inPur = new Set(read().map(i => i.productId).filter(Boolean));
+        const chip = (k, label) => `<button type="button" class="chip ${pick.sec === k ? 'on' : ''} ${counts[k] ? '' : 'zero'}" data-pick-sec="${esc(k)}" aria-pressed="${pick.sec === k}">${esc(label)} <span class="muted">${counts[k]}</span></button>`;
+        el.innerHTML = `<details class="pick-box" ${pick.open ? 'open' : ''}><summary>Додати товари «${esc(sup.name)}»${sectionsOf(sup).length ? ' за розділами' : ''} <span class="muted small">${own.length}</span></summary>
+          <div class="chips sec-chips">${chip(SEC_ALL, 'Усі товари')}${sectionsOf(sup).map(x => chip(x.id, x.name)).join('')}${counts[SEC_NONE] && sectionsOf(sup).length ? chip(SEC_NONE, 'Без розділу') : ''}</div>
+          <label class="search">${svg('search')}<input class="input" data-pick-q value="${esc(pick.q)}" placeholder="${pick.sec === SEC_ALL ? 'Пошук по всіх товарах постачальника' : 'Пошук у розділі'}" aria-label="Пошук товарів постачальника"></label>
+          <div class="list pick-list">${list.length ? list.map(x => { const c = Calc.unitCost(x); const on = inPur.has(x.id); return `<div class="li"><div class="t"><span class="nm">${esc(x.name)}</span><span class="small muted">${isNum(c) ? fmtMoney(c) + ' / од.' : 'ціна не задана'}${x.sku ? ' · арт. ' + esc(x.sku) : ''}</span></div><button type="button" class="btn sm ${on ? 'ghost' : ''}" data-pick-add="${x.id}">${on ? '✓ Ще раз' : '+ Додати'}</button></div>`; }).join('') : '<p class="small muted" style="margin:0">Нічого не знайдено.</p>'}</div></details>`;
+      };
+      const pickEl = m.querySelector('#pur-pick');
+      pickEl.addEventListener('toggle', e => { if (e.target.matches('.pick-box')) pick.open = e.target.open; }, true);
+      pickEl.addEventListener('click', e => {
+        const sec = e.target.closest('[data-pick-sec]'), add = e.target.closest('[data-pick-add]');
+        if (sec) { pick.sec = sec.dataset.pickSec; drawPick(); pickEl.querySelector(`[data-pick-sec="${CSS.escape(pick.sec)}"]`)?.focus(); }
+        else if (add) {
+          const prod = Repo.get('products', add.dataset.pickAdd); if (!prod) return;
+          box.insertAdjacentHTML('beforeend', row({ id: uid(), productId: prod.id, qty: 1 }, supOf())); fill(box.lastElementChild, prod);
+          upd(); drawPick(); toast(`Додано: ${prod.name}`);
+        }
+      });
+      pickEl.addEventListener('input', e => { if (!e.target.matches('[data-pick-q]')) return; pick.q = e.target.value; const pos = e.target.selectionStart; drawPick(); const q = pickEl.querySelector('[data-pick-q]'); q.focus(); q.setSelectionRange(pos, pos); });
+      m.querySelector('#item-add').onclick = () => { box.insertAdjacentHTML('beforeend', row({ id: uid() }, supOf())); upd(); };
+      box.addEventListener('click', e => { const b = e.target.closest('[data-i-del]'); if (b) { b.closest('[data-item]').remove(); upd(); drawPick(); } });
       box.addEventListener('change', e => {
         if (!e.target.matches('[data-i-prod]')) return;
         const r = e.target.closest('[data-item]'); const prod = e.target.value && Repo.get('products', e.target.value);
-        r.querySelector('[data-i-name]').hidden = !!prod;
-        if (prod) { const c = Calc.unitCost(prod); r.querySelector('[data-i-name]').value = prod.name; if (isNum(c)) r.querySelector('[data-i-price]').value = String(Math.round(c * 100) / 100).replace('.', ',');
-          r.querySelector('[data-i-retail]').value = isNum(prod.retailPrice) ? String(prod.retailPrice).replace('.', ',') : '';
-          if (!form.supplierId.value && prod.supplierId) form.supplierId.value = prod.supplierId; }
-        upd();
+        fill(r, prod);
+        if (prod && !form.supplierId.value && prod.supplierId) { form.supplierId.value = prod.supplierId; form.supplierId.dispatchEvent(new Event('change', { bubbles: true })); }
+        upd(); drawPick();
       });
-      form.addEventListener('input', upd); form.addEventListener('change', upd); upd();
+      form.supplierId.addEventListener('change', () => {
+        const sup = supOf(); pick.sec = SEC_ALL; pick.q = '';
+        box.querySelectorAll('[data-i-prod]').forEach(sel => { const val = sel.value; sel.innerHTML = prodOptions(val, sup); });
+        drawPick();
+      });
+      form.addEventListener('input', e => { if (!e.target.closest('#pur-pick')) upd(); }); form.addEventListener('change', e => { if (!e.target.closest('#pur-pick')) upd(); });
+      upd(); drawPick();
     },
     read: (fd, form) => {
       const errors = {}; if (!g(fd, 'title')) errors.title = 'Вкажіть назву.';
@@ -509,9 +597,12 @@ export function purchaseForm(id, preset = {}) {
         const productId = r.querySelector('[data-i-prod]').value || null; const prod = productId && Repo.get('products', productId);
         const q = parseNum(r.querySelector('[data-i-qty]').value), pr = parseNum(r.querySelector('[data-i-price]').value), retail = parseNum(r.querySelector('[data-i-retail]').value);
         if (Number.isNaN(q) || (isNum(q) && q <= 0) || Number.isNaN(pr) || (isNum(pr) && pr < 0) || Number.isNaN(retail) || (isNum(retail) && retail < 0)) errors.items = true;
-        return { id: r.dataset.item, productId, name: prod ? prod.name : r.querySelector('[data-i-name]').value.trim(), qty: isNum(q) ? q : null, unitPrice: isNum(pr) ? pr : null, retailPrice: isNum(retail) ? retail : null };
+        const old = p && p.items.find(x => x.id === r.dataset.item);
+        return { ...(old || {}), id: r.dataset.item, productId, name: prod ? prod.name : r.querySelector('[data-i-name]').value.trim(), qty: isNum(q) ? q : null, unitPrice: isNum(pr) ? pr : null, retailPrice: isNum(retail) ? retail : null };
       }).filter(i => i.name || i.productId);
-      const values = { title: g(fd, 'title'), supplierId: g(fd, 'supplierId') || null, status: g(fd, 'status'), firstPurchase: fd.has('firstPurchase'), expectedDate: dateField(fd, 'expectedDate', errors), deliveryCost: moneyField(fd, 'deliveryCost', errors), items, comment: g(fd, 'comment') };
+      const pct = parseNum(g(fd, 'discountPct'));
+      if (Number.isNaN(pct) || (isNum(pct) && (pct < 0 || pct > 100))) errors.discountPct = 'Від 0 до 100, наприклад 10 або 7,5.';
+      const values = { title: g(fd, 'title'), supplierId: g(fd, 'supplierId') || null, status: g(fd, 'status'), firstPurchase: fd.has('firstPurchase'), expectedDate: dateField(fd, 'expectedDate', errors), deliveryCost: moneyField(fd, 'deliveryCost', errors), discountPct: isNum(pct) ? Math.round(pct * 100) / 100 : 0, items, comment: g(fd, 'comment') };
       if (errors.items) { delete errors.items; errors.title = errors.title || 'Перевірте позиції: кількість має бути більшою за нуль, ціна не від’ємна.'; }
       return { errors, values };
     },

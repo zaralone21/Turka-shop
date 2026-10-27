@@ -1,7 +1,7 @@
 import { Calc } from '../../core/calc.js';
 import { purchaseLink } from '../../core/opening.js';
 import { Schema } from '../../core/schema.js';
-import { byText, daysFromToday, esc, fmtDate, fmtMoney } from '../../core/utils.js';
+import { byText, daysFromToday, discText, esc, fmtDate, fmtMoney } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, supplierName } from '../shared.js';
 import { svg } from '../shell.js';
 import { cartButton } from './cart.js';
@@ -12,7 +12,7 @@ export const purchasePill = s => `<span class="pill ${STATUS_PILL[s]}">${Schema.
 
 VIEWS.purchases = () => {
   const d = D(); const sum = Calc.purchases(d);
-  const head = `<div class="page-head"><p>Заплановані й очікувані закупівлі товару. Суми рахуються з позицій і доставки.</p><div class="row">${cartButton()}<button class="btn primary hide-m" data-act="add-purchase">+ Нова закупівля</button></div></div>`;
+  const head = `<div class="page-head"><p>Заплановані й очікувані закупівлі товару. Суми рахуються з позицій, знижки постачальника й доставки.</p><div class="row">${cartButton()}<button class="btn primary hide-m" data-act="add-purchase">+ Нова закупівля</button></div></div>`;
   if (!d.purchases.length) return head + emptyState('Запишіть першу закупівлю: у кого, що й скільки береться, коли чекати доставку.', 'add-purchase', 'Запланувати закупівлю');
   const order = { awaiting: 0, ordered: 1, planned: 2, received: 3, cancelled: 4 };
   const list = d.purchases.filter(p => !UI.f.purStatus || p.status === UI.f.purStatus)
@@ -25,7 +25,7 @@ VIEWS.purchases = () => {
   </section>
   <div class="chips sec-chips" role="group" aria-label="Статус">${[['', 'Усі'], ...Object.entries(Schema.PURCHASE_STATUSES)].map(([k, v]) => { const n = k ? d.purchases.filter(p => p.status === k).length : d.purchases.length; return n || !k ? `<button class="chip ${UI.f.purStatus === k ? 'on' : ''}" data-act="pur-status" data-v="${k}" aria-pressed="${UI.f.purStatus === k}">${v} <span class="muted">${n}</span></button>` : ''; }).join('')}</div>
   ${list.length ? `<div class="pur-list">${list.map(purchaseCard).join('')}</div>` : '<p class="muted">Немає закупівель з таким статусом.</p>'}
-  <details class="explain"><summary>Як рахується і як пов’язано з бюджетом</summary><div class="formula"><span><b>Сума закупівлі</b> = Σ (кількість × ціна одиниці) + доставка.</span><span>Закупівлі не додаються до бюджету самі, щоб не порахувати гроші двічі. Кнопка «Внести в бюджет» створює одну статтю витрат і пов’язує її із закупівлею. Якщо потім сума закупівлі зміниться, з’явиться позначка розбіжності й пропозиція оновити план статті. Сплачене змінюєте лише ви, у бюджеті.</span></div></details>`;
+  <details class="explain"><summary>Як рахується і як пов’язано з бюджетом</summary><div class="formula"><span><b>Сума товарів</b> = Σ (кількість × ціна одиниці).</span><span><b>До оплати</b> = сума товарів × (1 − знижка постачальника ÷ 100) + доставка. Знижка діє лише на товари й розподіляється між позиціями пропорційно їхній вартості; з неї рахуються фактична собівартість і маржа.</span><span>Закупівлі не додаються до бюджету самі, щоб не порахувати гроші двічі. Кнопка «Внести в бюджет» створює одну статтю витрат і пов’язує її із закупівлею. Якщо потім сума закупівлі зміниться, з’явиться позначка розбіжності й пропозиція оновити план статті. Сплачене змінюєте лише ви, у бюджеті.</span></div></details>`;
 };
 /** Стан зв'язку з бюджетом: розбіжність суми, видалена стаття, скасована закупівля з активною статтею. */
 export function purchaseBudgetLine(p) {
@@ -43,7 +43,7 @@ function purchaseCard(p) {
     <div class="sup-top"><span class="lead" aria-hidden="true">${svg('box')}</span>
       <div class="mn"><h3>${esc(p.title)}</h3><div class="small muted">${esc(supplierName(p.supplierId) || 'Постачальник не вказаний')}</div>
         <div class="small ${late ? '' : 'muted'}">${p.expectedDate ? (late ? `<span class="pill bad">Запізнюється · ${fmtDate(p.expectedDate)}</span>` : 'Очікується ' + fmtDate(p.expectedDate)) : 'Дата не вказана'}</div></div>
-      <div class="trail">${purchasePill(p.status)}<b class="num">${fmtMoney(t.total)}</b><span class="small muted">${p.items.length} ${p.items.length === 1 ? 'позиція' : 'позицій'}${qty ? ` · ${qty} шт` : ''}</span></div></div>
+      <div class="trail">${purchasePill(p.status)}${t.discountPct ? `<span class="small muted num pur-was"><s>${fmtMoney(t.goods + t.delivery)}</s> · −${discText(t.discountPct)}</span>` : ''}<b class="num">${fmtMoney(t.total)}</b><span class="small muted">${p.items.length} ${p.items.length === 1 ? 'позиція' : 'позицій'}${qty ? ` · ${qty} шт` : ''}</span></div></div>
     ${t.missing.length ? `<div class="small" style="color:var(--warn)">${t.missing.length} без ціни або кількості, у суму не входять</div>` : ''}
     ${purchaseBudgetLine(p)}
   </article>`;

@@ -4,7 +4,7 @@ import { NO_SECTION } from '../../core/sections.js';
 import { byText, daysFromToday, esc, fmtDate, fmtKyiv, fmtMoney, plural } from '../../core/utils.js';
 import { D, UI, VIEWS, emptyState, ext, igLink, statusPill } from '../shared.js';
 import { svg } from '../shell.js';
-import { productTable } from './products.js';
+import { supplierProducts } from './supplierSections.js';
 import { minOrderLabel, minOrderOf } from '../../core/cart.js';
 import { purchasePill } from './purchases.js';
 import { Calc } from '../../core/calc.js';
@@ -62,10 +62,7 @@ export function supplierDetail(s) {
     </dl>${!s.minOrder && !minOrderOf(s) && !s.paymentTerms && !s.deliveryTerms && !s.defectTerms ? '<p class="muted small">Умови ще не записані.</p>' : ''}
     ${s.notes ? `<h3 style="margin:14px 0 6px">Нотатки</h3><div class="pre small">${esc(s.notes)}</div>` : ''}</section>
   </div>
-  <section class="panel">
-    <div class="panel-head"><h2>Товари та ціни (${products.length})</h2><button class="btn sm primary" data-act="add-product" data-supplier="${s.id}">+ Додати товар</button></div>
-    ${products.length ? productTable(products, false) : '<p class="muted small" style="margin:0">У цього постачальника ще немає товарів. Додайте товар із ціною, щоб не шукати її в переписці.</p>'}
-  </section>
+  ${supplierProducts(s, products)}
   <section class="panel">
     <div class="panel-head"><h2>Нотатки про постачальника (${notes.length})</h2><button class="btn sm" data-act="add-note" data-supplier="${s.id}">+ Нотатка</button></div>
     ${notes.length ? `<div class="list">${notes.map(n => `<div class="li"><div class="t"><b>${esc(n.title || 'Без заголовка')}</b><div class="small muted clamp" style="-webkit-line-clamp:2">${esc(n.body)}</div></div><button class="btn sm" data-act="edit-note" data-id="${n.id}">Відкрити</button></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Нотаток поки немає.</p>'}

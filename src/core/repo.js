@@ -111,6 +111,15 @@ export function createRepo() {
         d.reminders.forEach(r => { if (r.link && r.link.type === 'supplier' && r.link.id === id) { r.link = null; r.updatedAt = nowISO(); } });
       });
     },
+    /** Зберігає розділи постачальника. Товари з видаленого розділу переходять у «Без розділу»; самі товари й закупівлі не змінюються. */
+    async setSupplierSections(id, sections) {
+      await mutate(d => {
+        const i = d.suppliers.findIndex(s => s.id === id); if (i < 0) return;
+        const t = nowISO(); const after = Schema.normalizeRecord('suppliers', { ...d.suppliers[i], sections, updatedAt: t }); d.suppliers[i] = after;
+        const ids = new Set(after.sections.map(x => x.id));
+        d.products.forEach((p, k) => { if (p.supplierId === id && p.supplierSectionId && !ids.has(p.supplierSectionId)) d.products[k] = { ...p, supplierSectionId: null, updatedAt: t }; });
+      });
+    },
     linkedToSupplier: id => ({ products: data.products.filter(p => p.supplierId === id), notes: data.notes.filter(n => n.supplierId === id), purchases: data.purchases.filter(p => p.supplierId === id) }),
     async setSettings(patch) { await mutate(d => Object.assign(d.settings, patch)); },
     async addBudgetCategory(name) { const c = { id: 'c-' + uid().slice(0, 8), name, builtin: false, refundable: false }; await mutate(d => d.settings.budgetCategories.push(c)); return c; },

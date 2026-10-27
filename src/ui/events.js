@@ -9,6 +9,7 @@ import { copyText, exportJSON, importFile, showJSON } from './backup.js';
 import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseForm, noteForm, openGallery, productForm, productView, quickRetail, purchaseForm, purchaseRelink, purchaseSync, purchaseToBudget, reminderDone, reminderForm, snoozeSheet, supplierForm, taskForm } from './forms.js';
 import { deletePhotos } from './photos.js';
 import { CART_ACTIONS, CART_CHANGE, bindCartRender } from './views/cart.js';
+import { SUPSEC_ACTIONS } from './views/supplierSections.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, isGhostTap, confirmDialog, modalEl, openModal } from './modal.js';
@@ -32,10 +33,10 @@ export const ACTIONS = {
   'prod-view': el => { try { localStorage.setItem('komfort-prod-view', el.dataset.v); } catch { /* приватний режим */ } render(); },
   'task-toggle': async el => { const t = Repo.get('tasks', el.dataset.id); const done = t.status !== 'done'; await Repo.update('tasks', t.id, { status: done ? 'done' : 'planned' }); toast(done ? 'Завдання виконано' : 'Завдання повернуто в роботу'); },
   'add-supplier': () => supplierForm(), 'edit-supplier': el => supplierForm(el.dataset.id), 'del-supplier': el => deleteSupplier(el.dataset.id),
-  'open-supplier': el => { UI.supplierId = el.dataset.id; go('suppliers'); UI.supplierId = el.dataset.id; render(); },
+  'open-supplier': el => { if (UI.f.supSecFor !== el.dataset.id) Object.assign(UI.f, { supSecFor: el.dataset.id, supSec: '', supProdQ: '' }); UI.supplierId = el.dataset.id; go('suppliers'); UI.supplierId = el.dataset.id; render(); },
   'back-suppliers': () => { UI.supplierId = null; render(); },
   'supplier-checked': async el => { await Repo.update('suppliers', el.dataset.id, { checkedAt: todayISO() }); toast('Дату перевірки оновлено'); },
-  'add-product': el => productForm(null, el.dataset.supplier), 'edit-product': el => productForm(el.dataset.id), 'view-product': el => productView(el.dataset.id),
+  'add-product': el => productForm(null, el.dataset.supplier, { section: el.dataset.section }), 'edit-product': el => productForm(el.dataset.id), 'view-product': el => productView(el.dataset.id),
   'del-product': async el => { const p = Repo.get('products', el.dataset.id); const n = (p.photos || []).length; if (await confirmDialog({ title: 'Видалити товар?', text: `<p style="margin:0">«${esc(p.name)}» буде видалено${n ? ` разом із фото (${n})` : ''}.</p>` })) { await Repo.remove('products', p.id); deletePhotos(p.photos); toast('Товар видалено'); } },
   'product-photos': el => { const p = Repo.get('products', el.dataset.id); if (p) openGallery(p); },
   'add-note': el => noteForm(null, el.dataset.supplier), 'edit-note': el => noteForm(el.dataset.id),
@@ -47,6 +48,8 @@ export const ACTIONS = {
   'prod-quick': el => { UI.f.prodQuick = el.dataset.v; render(); },
   'quick-retail': el => quickRetail(el.dataset.id),
   ...CART_ACTIONS,
+  'sup-sec': el => { SUPSEC_ACTIONS['sup-sec'](el); render(); },
+  'sup-sec-manage': SUPSEC_ACTIONS['sup-sec-manage'], 'sup-sec-move': SUPSEC_ACTIONS['sup-sec-move'],
   'go-cart': () => { CART_ACTIONS['go-cart'](); go('cart'); },
   'cart-back': () => { const y = UI.catalogScroll || 0; go('products'); if (y) window.scrollTo(0, y); },
   'go-purchases': () => go('purchases'),
