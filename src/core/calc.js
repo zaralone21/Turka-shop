@@ -1,5 +1,8 @@
 import { fmtPct, isNum, parseNum } from './utils.js';
 
+/** Вартість позиції в копійках (з поправкою на похибку дробових чисел). */
+const lineCents = i => Math.round(Number((i.qty * i.unitPrice * 100).toFixed(6)));
+
 /* =====================================================================
    4. РОЗРАХУНКИ (чисті функції, без доступу до інтерфейсу)
    ===================================================================== */
@@ -67,12 +70,47 @@ export const Calc = {
     return { ok: true, F, m, v: vv, A, D, share, monthly, daily, purchases };
   },
 
-  /** Сума закупівлі = Σ кількість × ціна одиниці + доставка. Позиції без ціни або кількості не рахуються й повертаються в missing. */
+  /** Знижка постачальника на закупівлю у відсотках: 0…100, для старих закупівель без поля — 0. */
+  discountPct(p) { const v = Number(p && p.discountPct); return isNum(v) && v > 0 ? Math.min(v, 100) : 0; },
+  /**
+   * Сума закупівлі. Сума товарів = Σ кількість × ціна одиниці; знижка постачальника діє лише на товари:
+   * товари до оплати = сума товарів × (1 − знижка / 100); доставка додається після знижки.
+   * Зі знижкою суми округлюються до копійок. Позиції без ціни або кількості не рахуються й повертаються в missing.
+   */
   purchaseTotal(p) {
-    let items = 0; const missing = [];
-    for (const i of p.items || []) { if (isNum(i.qty) && isNum(i.unitPrice)) items += i.qty * i.unitPrice; else missing.push(i); }
+    let goods = 0, goodsC = 0; const missing = [];
+    for (const i of p.items || []) { if (isNum(i.qty) && isNum(i.unitPrice)) { goods += i.qty * i.unitPrice; goodsC += lineCents(i); } else missing.push(i); }
+    const pct = Calc.discountPct(p);
+    let discount = 0, items = goods;
+    // Зі знижкою кожна позиція округлюється до копійок, щоб сума позицій точно збігалася з підсумком.
+    if (pct > 0) { goods = goodsC / 100; discount = Math.round(goodsC * pct / 100) / 100; items = (goodsC - Math.round(goodsC * pct / 100)) / 100; }
     const delivery = isNum(p.deliveryCost) ? p.deliveryCost : 0;
-    return { items, delivery, total: items + delivery, missing };
+    return { goods, discountPct: pct, discount, items, delivery, total: items + delivery, missing };
+  },
+  /**
+   * Позиції закупівлі з урахуванням знижки: знижка розподіляється пропорційно вартості позицій
+   * (у копійках, методом найбільших залишків), тож сума позицій після знижки дорівнює товарам до оплати.
+   * Початкова ціна (unitPrice) зберігається; unitNet — фактична собівартість одиниці.
+   */
+  purchaseLines(p) {
+    const t = Calc.purchaseTotal(p);
+    const priced = (p.items || []).filter(i => isNum(i.qty) && isNum(i.unitPrice));
+    const grossC = priced.map(lineCents);
+    let netC = grossC.slice();
+    if (t.discountPct > 0) {
+      const sumC = grossC.reduce((a, x) => a + x, 0), targetC = Math.round(t.items * 100);
+      const raw = grossC.map(x => (sumC ? x * targetC / sumC : 0));
+      netC = raw.map(Math.floor);
+      let rest = targetC - netC.reduce((a, x) => a + x, 0);
+      raw.map((x, k) => [x - Math.floor(x), k]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).forEach(([, k]) => { if (rest > 0) { netC[k]++; rest--; } });
+    }
+    const lines = priced.map((i, k) => {
+      const net = netC[k] / 100, unitNet = i.qty ? net / i.qty : null;
+      const retail = isNum(i.retailPrice) ? i.retailPrice : null;
+      return { id: i.id, name: i.name, productId: i.productId || null, qty: i.qty, unitPrice: i.unitPrice, gross: grossC[k] / 100, discount: (grossC[k] - netC[k]) / 100, net, unitNet,
+        retailPrice: retail, revenue: retail !== null ? i.qty * retail : null, profit: retail !== null ? i.qty * retail - net : null, margin: Calc.margin(unitNet, retail) };
+    });
+    return { ...t, lines };
   },
   /** Підсумок закупівель за статусами. */
   purchases(d) {

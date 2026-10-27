@@ -48,6 +48,8 @@ export function fmtPct(n) { return isNum(n) ? n.toFixed(1).replace('.', ',') + '
 /** Сума/відсоток зі справжнім знаком мінус: колір не єдине позначення збитку. */
 export const signedMoney = n => isNum(n) ? (n < 0 ? '−' + fmtMoney(-n) : fmtMoney(n)) : '—';
 export const signedPct = n => isNum(n) ? (n < 0 ? '−' + fmtPct(-n) : fmtPct(n)) : '—';
+/** Відсоток знижки як введено: 10 → «10%», 7,5 → «7,5%». */
+export const discText = n => `${String(Math.round((n || 0) * 100) / 100).replace('.', ',')}%`;
 export function fmtNum(n) { return isNum(n) ? moneyFmt.format(n) : ''; }
 /** Дата ДД.ММ.РРРР із 'YYYY-MM-DD' або ISO-часу. */
 export function fmtDate(v, withTime) {
