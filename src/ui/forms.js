@@ -4,15 +4,17 @@ import { Schema } from '../core/schema.js';
 import { freeExpensesForPurchase, purchaseAmount, purchaseLink } from '../core/opening.js';
 import { planRegroup, sectionsToText, textToSections } from '../core/sections.js';
 import { SEC_ALL, SEC_NONE, filterBySection, sectionCounts, sectionIdOf, sectionsOf } from '../core/supplierSections.js';
+import { assertStock, countsInStock, planReceipt, stockRows, variantLabel } from '../core/stock.js';
 import { once, syncExpensePlanned } from './budgetSync.js';
 import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core/reminders.js';
 import { discText, esc, fmtDate, fmtKyiv, fmtMoney, fmtNum, fmtPct, isNum, parseNum, plural, signedMoney, signedPct, splitList, todayISO, uid, uniq } from '../core/utils.js';
 import { ACTIONS } from './events.js';
 import { F, closeModal, confirmDialog, dateField, formModal, g, moneyField, openModal, supplierOptions } from './modal.js';
 import { LOCAL_BYTES, MAX_PHOTOS, dataBytes, deletePhotos, hydratePhotos, photoImg, savePhoto } from './photos.js';
-import { D, UI, ext, toast } from './shared.js';
+import { D, UI, ext, supplierName, toast } from './shared.js';
 import { render, svg } from './shell.js';
 import { addToCart, cartControl, stepCart } from './views/cart.js';
+import { bindSupplier, stockDetails, supLinks } from './views/stock.js';
 
 /* --- постачальник --- */
 export function supplierForm(id) {
@@ -214,7 +216,8 @@ export function productView(id, start = 0) {
   const tone = v => isNum(v) && v < 0 ? ' class="bad"' : '';
   const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   const sup = p.supplierId ? Repo.get('suppliers', p.supplierId) : null;
-  const known = new Set(['id', 'name', 'category', 'subcategory', 'sku', 'supplierId', 'supplierSectionId', 'unit', 'url', 'sizes', 'colors', 'priceType', 'purchasePrice', 'packQty', 'retailPrice', 'priceDate', 'comment', 'photos', 'createdAt', 'updatedAt']);
+  const stk = stockRows(D()).find(x => x.p.id === id);
+  const known = new Set(['id', 'name', 'category', 'subcategory', 'sku', 'supplierId', 'supplierSectionId', 'unit', 'url', 'sizes', 'colors', 'priceType', 'purchasePrice', 'packQty', 'retailPrice', 'priceDate', 'comment', 'photos', 'createdAt', 'updatedAt', 'minStock', 'retailCostBase']);
   const extra = Object.entries(p).filter(([k, v]) => !known.has(k) && (typeof v === 'string' ? v.trim() : typeof v === 'number' || typeof v === 'boolean'));
   const href = p.url ? (/^https?:\/\//i.test(p.url) ? p.url : 'https://' + p.url) : '';
   const gallery = photos.length ? `<div class="pv-photo"><button type="button" class="pv-main" data-pv-full aria-label="Збільшити фото">${photoImg(photos[i], 'pv-img', p.name)}</button>
@@ -235,11 +238,18 @@ export function productView(id, start = 0) {
       ${p.category ? row('Підрозділ', p.subcategory ? esc(p.subcategory) : none) : ''}
       ${row('Розміри', p.sizes ? esc(p.sizes) : none)}
       ${row('Кольори', p.colors ? esc(p.colors) : none)}
-      ${row('Постачальник', sup ? `<button type="button" class="btn link" data-pv-sup>${esc(sup.name)}</button>` : none)}
+      ${row(stk.suppliers.length > 1 ? 'Постачальники' : 'Постачальник', supLinks(stk.suppliers, id))}
       ${sup ? row('Розділ у постачальника', (() => { const sid = sectionIdOf(p, sup); return sid ? esc(sectionsOf(sup).find(x => x.id === sid).name) : '<span class="muted">Без розділу</span>'; })()) : ''}
       ${extra.map(([k, v]) => row(esc(k), esc(typeof v === 'boolean' ? (v ? 'так' : 'ні') : String(v)))).join('')}
     </dl>
     ${href ? `<a class="pv-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Відкрити у постачальника ↗</a>` : ''}</section>
+    <section class="pv-sec" aria-label="Наявність">${secH('Наявність', 'data-pv-stock', 'Історія')}
+    <dl class="kv pv-kv">
+      ${row('Залишок', `<span class="pv-stock"><b>${fmtNum(stk.qty)} шт</b>${stk.state === 'out' ? '<span class="pill stk-out">Немає в наявності</span>' : stk.state === 'low' ? '<span class="pill warn">Закінчується</span>' : ''}</span>`)}
+      ${stk.variants.some(v => v.size || v.color) ? row('Розміри й кольори', `<span class="stk-vars">${stk.variants.map(v => `<span class="stk-var ${v.qty <= 0 ? 'zero' : ''}">${esc(variantLabel(v) || 'Без розміру')} <b>${fmtNum(v.qty)}</b></span>`).join('')}</span>`) : ''}
+      ${stk.tracked ? row('Собівартість / од.', isNum(stk.cost) ? `${fmtMoney(stk.cost)} <span class="pv-hint">Середня в залишку, після знижки постачальника.</span>` : none) : ''}
+      ${stk.s && stk.s.batches.length ? row('Партії', stk.s.batches.map(b => `${fmtDate(b.date)}: ${fmtNum(b.qty)} шт${b.supplierId && supplierName(b.supplierId) ? ' · ' + esc(supplierName(b.supplierId)) : ''}`).join('<br>')) : ''}
+    </dl></section>
     <section class="pv-sec" aria-label="Ціни">${secH('Ціни', 'data-pv-prices', 'Змінити ціни')}
     <dl class="kv pv-kv">
       ${row('Одиниця', p.unit === 'pair' ? 'пара' : 'штука')}
@@ -261,7 +271,9 @@ export function productView(id, start = 0) {
         const t = e.target.closest('[data-pv]'); let t2;
         if (t) { i = +t.dataset.pv; m.querySelector('.pv-main').innerHTML = photoImg(photos[i], 'pv-img', p.name); m.querySelectorAll('[data-pv]').forEach(b => { const on = +b.dataset.pv === i; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); hydratePhotos(m); return; }
         if (e.target.closest('[data-pv-full]')) openGallery(p, i, back);
-        else if (e.target.closest('[data-pv-sup]')) { closeModal(); ACTIONS['open-supplier']({ dataset: { id: p.supplierId } }); }
+        else if ((t2 = e.target.closest('[data-act="open-supplier"]'))) { closeModal(); ACTIONS['open-supplier']({ dataset: { id: t2.dataset.id } }); }
+        else if (e.target.closest('[data-act="stock-bind-sup"]')) bindSupplier(id, back);
+        else if (e.target.closest('[data-pv-stock]')) stockDetails(id);
         else if (e.target.closest('[data-pv-edit]')) productForm(id, null, { backToView: true });
         else if (e.target.closest('[data-pv-specs]')) productSpecsForm(id, back);
         else if (e.target.closest('[data-pv-prices]')) productPricesForm(id, back);
@@ -512,7 +524,7 @@ export function purchaseForm(id, preset = {}) {
     const groups = [...sectionsOf(sup).map(x => [x.name, own.filter(o => sectionIdOf(o, sup) === x.id)]), [sectionsOf(sup).length ? 'Без розділу' : sup.name, own.filter(o => !sectionIdOf(o, sup))], ['Інші постачальники', other]].filter(([, l]) => l.length);
     return `<option value="">— вільна позиція —</option>${groups.map(([name, l]) => `<optgroup label="${esc(name)}">${l.map(opt).join('')}</optgroup>`).join('')}`;
   };
-  const row = (i, sup) => `<div class="r" data-item="${esc(i.id)}"><div class="field" style="gap:4px"><select class="input" data-i-prod aria-label="Товар">${prodOptions(i.productId, sup)}</select><input class="input" data-i-name placeholder="Назва позиції" value="${esc(i.name || '')}" aria-label="Назва позиції" ${i.productId ? 'hidden' : ''}></div>
+  const row = (i, sup) => `<div class="r" data-item="${esc(i.id)}"><div class="field" style="gap:4px"><select class="input" data-i-prod aria-label="Товар">${prodOptions(i.productId, sup)}</select><input class="input" data-i-name placeholder="Назва позиції" value="${esc(i.name || '')}" aria-label="Назва позиції" ${i.productId ? 'hidden' : ''}><div class="i-var"><input class="input" data-i-size placeholder="Розмір" value="${esc(i.size || '')}" aria-label="Розмір" maxlength="40"><input class="input" data-i-color placeholder="Колір" value="${esc(i.color || '')}" aria-label="Колір" maxlength="40"></div></div>
     <input class="input num" data-i-qty inputmode="decimal" placeholder="шт" value="${num(i.qty)}" aria-label="Кількість одиниць"><input class="input num" data-i-price inputmode="decimal" placeholder="Закупівля ₴" value="${num(i.unitPrice)}" aria-label="Ціна за одиницю"><input class="input num" data-i-retail inputmode="decimal" placeholder="Роздріб ₴" value="${num(i.retailPrice)}" aria-label="Роздрібна ціна за одиницю"><button type="button" class="btn sm ghost" data-i-del aria-label="Видалити позицію">✕</button></div>`;
   const sup0 = v.supplierId ? Repo.get('suppliers', v.supplierId) : null;
   formModal({
@@ -521,6 +533,8 @@ export function purchaseForm(id, preset = {}) {
       ${F.select('supplierId', 'Постачальник', v.supplierId || '', supplierOptions())}
       ${F.select('status', 'Статус', v.status, Object.entries(Schema.PURCHASE_STATUSES))}
       ${F.date('expectedDate', 'Очікувана дата', v.expectedDate)}
+      <div class="full pur-recv" id="pur-recv">${F.date('receivedDate', 'Дата отримання', v.receivedDate || '', { hint: 'З цієї дати товар з’являється в залишках.' })}
+        ${p && p.stockMode === 'legacy' ? `<label class="check"><input type="checkbox" name="countStock"> Врахувати в залишках</label><span class="hint">Закупівлю отримано до запуску обліку, тому її товари поки не входять у залишки. Позначте, якщо цей товар ще є в наявності.</span>` : '<span class="hint">Після збереження зі статусом «Отримано» товари додадуться в «Товари в наявності». Вільні позиції стануть товарами каталогу.</span>'}</div>
       ${F.money('deliveryCost', 'Доставка, ₴', v.deliveryCost)}
       ${F.money('discountPct', 'Знижка постачальника, %', v.discountPct || 0, { hint: 'Від 0 до 100, на всю суму товарів. На доставку не діє.' })}
       <label class="check full"><input type="checkbox" name="firstPurchase" ${v.firstPurchase ? 'checked' : ''}> Перша закупівля до відкриття</label>
@@ -589,6 +603,8 @@ export function purchaseForm(id, preset = {}) {
         drawPick();
       });
       form.addEventListener('input', e => { if (!e.target.closest('#pur-pick')) upd(); }); form.addEventListener('change', e => { if (!e.target.closest('#pur-pick')) upd(); });
+      const recv = () => { const on = form.status.value === 'received'; m.querySelector('#pur-recv').hidden = !on; if (on && !form.receivedDate.value) { form.receivedDate.value = fmtDate(todayISO()); } };
+      form.status.addEventListener('change', recv); recv();
       upd(); drawPick();
     },
     read: (fd, form) => {
@@ -598,16 +614,33 @@ export function purchaseForm(id, preset = {}) {
         const q = parseNum(r.querySelector('[data-i-qty]').value), pr = parseNum(r.querySelector('[data-i-price]').value), retail = parseNum(r.querySelector('[data-i-retail]').value);
         if (Number.isNaN(q) || (isNum(q) && q <= 0) || Number.isNaN(pr) || (isNum(pr) && pr < 0) || Number.isNaN(retail) || (isNum(retail) && retail < 0)) errors.items = true;
         const old = p && p.items.find(x => x.id === r.dataset.item);
-        return { ...(old || {}), id: r.dataset.item, productId, name: prod ? prod.name : r.querySelector('[data-i-name]').value.trim(), qty: isNum(q) ? q : null, unitPrice: isNum(pr) ? pr : null, retailPrice: isNum(retail) ? retail : null };
+        return { ...(old || {}), id: r.dataset.item, productId, name: prod ? prod.name : r.querySelector('[data-i-name]').value.trim(), qty: isNum(q) ? q : null, unitPrice: isNum(pr) ? pr : null, retailPrice: isNum(retail) ? retail : null,
+          size: r.querySelector('[data-i-size]').value.trim(), color: r.querySelector('[data-i-color]').value.trim() };
       }).filter(i => i.name || i.productId);
       const pct = parseNum(g(fd, 'discountPct'));
       if (Number.isNaN(pct) || (isNum(pct) && (pct < 0 || pct > 100))) errors.discountPct = 'Від 0 до 100, наприклад 10 або 7,5.';
       const values = { title: g(fd, 'title'), supplierId: g(fd, 'supplierId') || null, status: g(fd, 'status'), firstPurchase: fd.has('firstPurchase'), expectedDate: dateField(fd, 'expectedDate', errors), deliveryCost: moneyField(fd, 'deliveryCost', errors), discountPct: isNum(pct) ? Math.round(pct * 100) / 100 : 0, items, comment: g(fd, 'comment') };
+      if (values.status === 'received') values.receivedDate = dateField(fd, 'receivedDate', errors) || todayISO();
+      if (p && p.stockMode === 'legacy' && fd.has('countStock')) values.stockMode = 'auto';
+      if (values.status === 'received' && (!p || p.stockMode !== 'legacy' || values.stockMode === 'auto') && items.some(i => !isNum(i.qty))) errors.title = errors.title || 'Для отриманої закупівлі вкажіть кількість у кожній позиції.';
       if (errors.items) { delete errors.items; errors.title = errors.title || 'Перевірте позиції: кількість має бути більшою за нуль, ціна не від’ємна.'; }
       return { errors, values };
     },
-    onDelete: p ? async () => { if (await confirmDialog({ title: 'Видалити закупівлю?', text: `<p style="margin:0">«${esc(p.title)}» буде видалено.${p.expenseId ? ' Пов’язана стаття бюджету залишиться.' : ''}</p>` })) { await Repo.remove('purchases', p.id); toast('Закупівлю видалено'); } } : null,
-    save: async vals => { if (p) { await Repo.update('purchases', p.id, vals); toast('Закупівлю збережено'); await afterPurchaseEdit(p, Repo.get('purchases', p.id)); } else { await Repo.create('purchases', vals); toast('Закупівлю додано'); } },
+    onDelete: p ? async () => {
+      try { assertStock(D(), [{ collection: 'purchases', action: 'remove', id: p.id }]); } catch (ex) { toast('Не можна видалити: ' + ex.message, 'error'); return; }
+      const counted = countsInStock(p);
+      if (await confirmDialog({ title: 'Видалити закупівлю?', text: `<p style="margin:0">«${esc(p.title)}» буде видалено.${p.expenseId ? ' Пов’язана стаття бюджету залишиться.' : ''}${counted ? ' Її товари зникнуть із залишків.' : ''}</p>` })) { await Repo.remove('purchases', p.id); toast('Закупівлю видалено'); }
+    } : null,
+    save: async vals => {
+      // Отримана закупівля оприбутковується: вільні позиції стають товарами, від’ємних залишків бути не може.
+      const id2 = p ? p.id : uid();
+      const plan = planReceipt(D(), { ...(p || {}), ...vals, id: id2 }, uid);
+      const ops = [...plan.ops, p ? { collection: 'purchases', action: 'update', id: id2, fields: { ...vals, items: plan.purchase.items } } : { collection: 'purchases', action: 'create', id: id2, fields: { ...vals, items: plan.purchase.items, stockMode: 'auto' } }];
+      assertStock(D(), ops);
+      await Repo.commit(ops);
+      toast((p ? 'Закупівлю збережено' : 'Закупівлю додано') + (plan.created.length ? `. Нові товари в каталозі: ${plan.created.length}` : ''));
+      if (p) await afterPurchaseEdit(p, Repo.get('purchases', p.id));
+    },
   });
 }
 /** Після редагування закупівлі: при скасуванні — запропонувати переглянути статтю, при зміні суми — оновити план (було → стане). */

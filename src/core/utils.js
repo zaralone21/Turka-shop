@@ -3,7 +3,7 @@
    1. КОНСТАНТИ ТА УТИЛІТИ
    ===================================================================== */
 export const APP_ID = 'turka-shop-dashboard';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const KEYS = { data: 'turka-shop:data', demo: 'turka-shop:demo', mode: 'turka-shop:mode', cloudCache: 'turka-shop:cloud:', migrated: 'turka-shop:migrated:' };
 
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));

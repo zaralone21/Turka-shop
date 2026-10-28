@@ -64,7 +64,7 @@ export const brandHtml = () => `<div class="brand">${cottonLogo()}<div class="nm
 export const TABS = [['home', 'Огляд', 'home'], ['planner', 'Справи', 'planner'], ['products', 'Товари', 'products'], ['finance', 'Фінанси', 'budget'], ['more', 'Ще', 'more']];
 export const MORE_PAGES = ['suppliers', 'purchases', 'notes', 'opening', 'ai', 'data'];
 /* Що додає кнопка «+» у кожному розділі. */
-export const FAB_ACTION = { suppliers: 'add-supplier', products: 'add-product', notes: 'add-note', planner: 'add-task', opening: 'add-prep-task', budget: 'add-expense', purchases: 'add-purchase', firstbuy:'first-buy-add', payments:'add-expense', reminders: 'add-reminder', fitout: 'add-fitout', monthly: 'add-monthly' };
+export const FAB_ACTION = { suppliers: 'add-supplier', products: 'add-product', notes: 'add-note', planner: 'add-task', opening: 'add-prep-task', budget: 'add-expense', purchases: 'add-purchase', stock: 'stock-op', firstbuy:'first-buy-add', payments:'add-expense', reminders: 'add-reminder', fitout: 'add-fitout', monthly: 'add-monthly' };
 
 function syncBadge() {
   const st = Repo.status;
@@ -181,7 +181,7 @@ function pageHead() {
   const descriptions = {
     planner: 'Завдання, терміни та нагадування.', opening: 'План відкриття, приміщення та облаштування.',
     finance: 'Бюджет, щомісячні витрати та розрахунки.', suppliers: 'Контакти, умови роботи та товари постачальників.',
-    products: 'Фото, закупівельні та роздрібні ціни.', purchases: 'Замовлення, суми та очікувані доставки.',
+    products: 'Каталог із цінами та товари, що є в наявності.', purchases: 'Замовлення, суми та очікувані доставки.',
     notes: 'Ідеї, домовленості та важлива інформація.', ai: 'Запитайте про свої дані або попросіть допомогти зі справами.', data: 'Обліковий запис, тема та резервні копії.',
   };
   return `<div class="page-title"><div class="pt-row"><h1>${esc(headTitle(UI.page))}</h1>${UI.page==='opening'?`<button class="btn sm" data-act="toggle-store-open">${D().settings.storeOpened?'Повернути підготовку на головну':'Магазин уже відкрито'}</button>`:''}</div><p class="page-description">${descriptions[sec || UI.page] || ''}</p>${tabs}</div>`;

@@ -43,6 +43,8 @@ export function createRepo() {
     }
     data = raw ? Schema.normalize(Schema.migrate(raw)) : (status.demo ? Demo.build() : Schema.empty());
     if (status.demo && !raw) await persist();
+    // Після оновлення структури даних (міграції) нова форма записується одразу, щоб інші пристрої бачили ті самі позначки.
+    else if (raw && !status.loadError && Number(raw.schemaVersion || 1) < SCHEMA_VERSION) await persist();
     if (status.cloud && adapter.hasPending && adapter.hasPending(data)) await persist();
     emit();
   }
@@ -79,6 +81,18 @@ export function createRepo() {
     async update(name, id, fields) { await mutate(d => { const i = d[name].findIndex(x => x.id === id); if (i >= 0) { const before = d[name][i]; const after = Schema.normalizeRecord(name, { ...before, ...fields, updatedAt: nowISO() }); remember(name, before, after, fields); d[name][i] = after; } }); },
     /** Кілька змін однієї колекції одним збереженням: [{id, fields}]. */
     async updateMany(name, changes) { const t = nowISO(); await mutate(d => { for (const c of changes) { const i = d[name].findIndex(x => x.id === c.id); if (i >= 0) { const before = d[name][i]; const after = Schema.normalizeRecord(name, { ...before, ...c.fields, updatedAt: t }); remember(name, before, after, c.fields); d[name][i] = after; } } }); },
+    /** Зміни кількох колекцій одним збереженням: [{collection, action: 'create'|'update'|'remove', id, fields}]. */
+    async commit(ops) {
+      const t = nowISO();
+      await mutate(d => {
+        for (const o of ops) {
+          const list = d[o.collection]; const i = list.findIndex(x => x.id === o.id);
+          if (o.action === 'remove') { if (i >= 0) list.splice(i, 1); }
+          else if (o.action === 'create') { if (i < 0) list.push(Schema.normalizeRecord(o.collection, { ...o.fields, id: o.id, createdAt: t, updatedAt: t })); }
+          else if (i >= 0) { const before = list[i]; const after = Schema.normalizeRecord(o.collection, { ...before, ...o.fields, updatedAt: t }); remember(o.collection, before, after, o.fields); list[i] = after; }
+        }
+      });
+    },
     /** Кошик → закупівля одним збереженням: нова закупівля з'являється разом із прибиранням перенесених позицій. */
     async transferCart(purchase, cartIds) {
       const rec = Schema.normalizeRecord('purchases', purchase); const drop = new Set(cartIds);
@@ -107,7 +121,7 @@ export function createRepo() {
     async removeSupplier(id) {
       await mutate(d => {
         d.suppliers = d.suppliers.filter(s => s.id !== id);
-        [...d.products, ...d.notes, ...d.purchases].forEach(r => { if (r.supplierId === id) { r.supplierId = null; r.updatedAt = nowISO(); } });
+        [...d.products, ...d.notes, ...d.purchases, ...d.moves].forEach(r => { if (r.supplierId === id) { r.supplierId = null; r.updatedAt = nowISO(); } });
         d.reminders.forEach(r => { if (r.link && r.link.type === 'supplier' && r.link.id === id) { r.link = null; r.updatedAt = nowISO(); } });
       });
     },

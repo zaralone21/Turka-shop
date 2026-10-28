@@ -37,6 +37,14 @@ export const Demo = {
     const p1 = d.products[0];
     add('purchases', { title: 'Шкарпетки на відкриття (приклад)', supplierId: s1.id, status: 'awaiting', expectedDate: off(4), deliveryCost: 150, items: [{ id: uid(), productId: p1.id, name: p1.name, qty: 120, unitPrice: 30 }] });
     add('purchases', { title: 'Тапки на зиму (приклад)', supplierId: s2.id, status: 'planned', expectedDate: off(20), deliveryCost: null, items: [{ id: uid(), productId: d.products[1].id, name: d.products[1].name, qty: 20, unitPrice: 140 }] });
+    // Отримані закупівлі й рух товару — для розділу «Товари в наявності».
+    const p2 = d.products[1];
+    add('purchases', { title: 'Тапки на осінь (приклад)', supplierId: s2.id, status: 'received', stockMode: 'auto', receivedDate: off(-12), discountPct: 10, deliveryCost: null,
+      items: [{ id: uid(), productId: p2.id, name: p2.name, qty: 8, unitPrice: 140, size: '36–38' }, { id: uid(), productId: p2.id, name: p2.name, qty: 6, unitPrice: 140, size: '39–41' }] });
+    add('purchases', { title: 'Шкарпетки, дозамовлення (приклад)', supplierId: s1.id, status: 'received', stockMode: 'auto', receivedDate: off(-5), deliveryCost: 120,
+      items: [{ id: uid(), productId: p1.id, name: p1.name, qty: 24, unitPrice: 32, color: 'чорний' }, { id: uid(), productId: p1.id, name: p1.name, qty: 2, unitPrice: 32, color: 'сірий' }] });
+    add('moves', { type: 'sale', productId: p2.id, size: '36–38', qty: 6, unitPrice: 279, date: off(-3) });
+    add('moves', { type: 'return', productId: p2.id, size: '36–38', qty: 1, resellable: true, date: off(-1) });
     add('reminders', { title: 'Написати постачальнику про доставку (приклад)', date: off(0), time: '10:00', repeat: 'none', status: 'planned', link: { type: 'supplier', id: s1.id } });
     add('reminders', { title: 'Оплатити оренду (приклад)', date: off(3), time: '09:00', repeat: 'monthly', status: 'planned', link: null });
     return Schema.normalize(d);

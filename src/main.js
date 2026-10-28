@@ -10,6 +10,7 @@ import { render } from './ui/shell.js';
 import './ui/views/home.js';
 import './ui/views/suppliers.js';
 import './ui/views/products.js';
+import './ui/views/stock.js';
 import './ui/views/notes.js';
 import './ui/views/planner.js';
 import './ui/views/budget.js';
