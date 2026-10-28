@@ -1,3 +1,4 @@
+import { assertStock, stockRows, stockTotals } from './stock.js';
 import { cartGroups, cartTotals, lineSum, lineUnits, withCatalogLinks } from './cart.js';
 import { Calc } from './calc.js';
 import { sectionIdOf } from './supplierSections.js';
@@ -61,6 +62,8 @@ function overview(d, now) {
     },
     budget: { total: b.total, needed: money(b.needed), paid: money(b.paid), toPay: money(b.toPay), free: money(b.free) },
     purchases: { plannedSum: money(p.planned), awaitingSum: money(p.awaiting), counts: p.count },
+    stock: (() => { const rows = stockRows(d), t = stockTotals(rows); return { positionsInStock: t.positions, units: t.units, valueAtCost: money(t.costValue), valueAtRetail: money(t.retailValue), potentialGrossProfit: money(t.gross), withoutRetailPrice: t.noRetail.positions,
+      running: rows.filter(r => r.state === 'low').slice(0, 15).map(r => ({ id: r.p.id, name: r.p.name, qty: r.qty })), note: 'Залишок = отримані закупівлі (крім внесених до запуску обліку) ± продажі, повернення, списання, коригування' }; })(),
     cart: (() => { const t = cartTotals(cartGroups(d.cart || [], d.suppliers)); return { positions: (d.cart || []).filter(x => x.kind === 'item').length, selectedSum: money(t.total), note: 'Деталі — list_cart' }; })(),
     opening: (() => { const r = openingReadiness(d, now); return { openingDate: r.openingDate, daysLeft: r.daysLeft, premises: r.premises && { id: r.premises.id, title: r.premises.title, status: r.premises.status, leaseConfirmed: r.premises.leaseConfirmed }, prepTasks: r.prep, blockers: r.blockers.length, note: 'Деталі: get_opening_status' }; })(),
     warnings: runChecks(d, now).map(c => ({ level: c.level, text: c.text, ref: c.ref || undefined })),
@@ -254,6 +257,13 @@ const show = v => (v === null || v === undefined || v === '' ? '—' : typeof v 
 export function planChanges(d, changes) {
   need(Array.isArray(changes) && changes.length, 'Немає змін');
   need(changes.length <= 30, 'Забагато змін за раз');
+  const plan = planOne(d, changes);
+  // Зміни закупівель не можуть зробити залишок від’ємним (наприклад, видалення отриманої закупівлі, з якої вже продано).
+  try { assertStock(d, plan.filter(c => c.collection !== 'settings').map((c, k) => ({ collection: c.collection, action: c.action === 'delete' ? 'remove' : c.action, id: c.id || 'new-' + k, fields: c.fields }))); }
+  catch (e) { need(false, 'Неможливо: ' + e.message); }
+  return plan;
+}
+function planOne(d, changes) {
   return changes.map(c => {
     need(['create', 'update', 'delete'].includes(c.action), 'Невідома дія');
     if (c.collection === 'settings') {

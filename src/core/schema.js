@@ -2,6 +2,7 @@ import { REMINDER_STATUSES, REPEATS, fireAt } from './reminders.js';
 import { FITOUT_STATUSES, MONTHLY_KINDS, PREMISES_STATUSES } from './opening.js';
 import { normalizeCartRecord } from './cart.js';
 import { SECTIONS_REV, mergeDefaultSections, normalizeSections } from './sections.js';
+import { MOVE_TYPES } from './stock.js';
 import { APP_ID, SCHEMA_VERSION, isNum, nowISO, parseNum, splitList, uid } from './utils.js';
 
 /* =====================================================================
@@ -22,10 +23,10 @@ export const Schema = (() => {
   const LINK_TYPES = { task: 'Завдання', supplier: 'Постачальник', purchase: 'Закупівля', premises: 'Приміщення', fitout: 'Облаштування', monthly: 'Щомісячна витрата' };
   /** Колекція записів для кожного типу прив'язки нагадування. */
   const LINK_COLLECTION = { task: 'tasks', supplier: 'suppliers', purchase: 'purchases', premises: 'premises', fitout: 'fitout', monthly: 'monthly' };
-  const COLLECTIONS = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders', 'premises', 'fitout', 'monthly', 'chats', 'cart'];
+  const COLLECTIONS = ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders', 'premises', 'fitout', 'monthly', 'chats', 'cart', 'moves'];
   /* Колекції, що є частиною робочих даних магазину (чати AI сюди не входять). */
   const DATA_COLLECTIONS = COLLECTIONS.filter(k => k !== 'chats');
-  const LABELS = { suppliers: 'постачальники', products: 'товари', notes: 'нотатки', tasks: 'завдання', expenses: 'витрати', purchases: 'закупівлі', reminders: 'нагадування', premises: 'приміщення', fitout: 'облаштування', monthly: 'щомісячні витрати', chats: 'чати AI', cart: 'кошик закупівель' };
+  const LABELS = { suppliers: 'постачальники', products: 'товари', notes: 'нотатки', tasks: 'завдання', expenses: 'витрати', purchases: 'закупівлі', reminders: 'нагадування', premises: 'приміщення', fitout: 'облаштування', monthly: 'щомісячні витрати', chats: 'чати AI', cart: 'кошик закупівель', moves: 'рух товару' };
 
   function empty() {
     const t = nowISO();
@@ -43,8 +44,9 @@ export const Schema = (() => {
         openingDate: '',
         storeOpened: false,
         fitoutCategories: [],
+        stockMin: 3,
       },
-      suppliers: [], products: [], notes: [], tasks: [], expenses: [], purchases: [], reminders: [], premises: [], fitout: [], monthly: [], chats: [], cart: [],
+      suppliers: [], products: [], notes: [], tasks: [], expenses: [], purchases: [], reminders: [], premises: [], fitout: [], monthly: [], chats: [], cart: [], moves: [],
     };
   }
 
@@ -54,6 +56,9 @@ export const Schema = (() => {
     2: d => ({ ...d, purchases: d.purchases || [], reminders: d.reminders || [], chats: d.chats || [] }),
     // v3: приміщення, облаштування, щомісячні витрати. Старі записи не змінюються.
     3: d => ({ ...d, premises: d.premises || [], fitout: d.fitout || [], monthly: d.monthly || [] }),
+    // v4: облік залишків. Уже отримані закупівлі позначаються як «до запуску обліку» і не потрапляють у залишки автоматично —
+    // їх можна врахувати вручну. Закупівлі, що ще в дорозі, оприбуткуються, коли будуть отримані.
+    4: d => ({ ...d, moves: d.moves || [], purchases: (d.purchases || []).map(p => (p && typeof p === 'object' && !p.stockMode ? { ...p, stockMode: p.status === 'received' ? 'legacy' : 'auto' } : p)) }),
   };
   function migrate(d) {
     let v = Number(d.schemaVersion) || 1;
@@ -89,12 +94,13 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
     .filter(x => x.name && !seen.has(x.name.toLowerCase()) && !ids.has(x.id) && seen.add(x.name.toLowerCase()) && ids.add(x.id)).slice(0, 100); };
   /** Знижка постачальника, %: від 0 до 100, дробова; некоректне значення — 0. */
   const pct = v => { const n = parseNum(v); return isNum(n) && n > 0 ? Math.min(Math.round(n * 100) / 100, 100) : 0; };
+  const nonNeg = v => { const n = numOrNull(v); return n !== null && n >= 0 ? n : null; };
   const pick = (v, map, def) => Object.prototype.hasOwnProperty.call(map, v) ? v : def;
 
   /* Нормалізатори зберігають невідомі поля (...x), щоб нові версії не втрачали дані. */
   const N = {
     suppliers: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categories: strArr(x.categories), instagram: str(x.instagram), website: str(x.website), phone: str(x.phone), messenger: str(x.messenger), contactPerson: str(x.contactPerson), city: str(x.city), minOrder: str(x.minOrder), paymentTerms: str(x.paymentTerms), deliveryTerms: str(x.deliveryTerms), defectTerms: str(x.defectTerms), notes: str(x.notes), sections: supSections(x.sections), status: pick(x.status, SUPPLIER_STATUSES, 'interested'), checkedAt: date(x.checkedAt), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
-    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), subcategory: str(x.subcategory), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, supplierSectionId: x.supplierId && x.supplierSectionId ? str(x.supplierSectionId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    products: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), category: str(x.category), subcategory: str(x.subcategory), sku: str(x.sku), supplierId: x.supplierId ? str(x.supplierId) : null, supplierSectionId: x.supplierId && x.supplierSectionId ? str(x.supplierSectionId) : null, url: str(x.url), sizes: str(x.sizes), colors: str(x.colors), priceType: x.priceType === 'pack' ? 'pack' : 'unit', purchasePrice: numOrNull(x.purchasePrice), packQty: numOrNull(x.packQty), retailPrice: numOrNull(x.retailPrice), priceDate: date(x.priceDate), minStock: nonNeg(x.minStock), comment: str(x.comment), photos: photos(x.photos), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     notes: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), body: str(x.body), tags: strArr(x.tags), pinned: !!x.pinned, supplierId: x.supplierId ? str(x.supplierId) : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     tasks: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), description: str(x.description), prep: !!x.prep, deadline: date(x.deadline), priority: pick(x.priority, PRIORITIES, 'medium'), status: pick(x.status, TASK_STATUSES, 'planned'), checklist: Array.isArray(x.checklist) ? x.checklist.filter(i => i && typeof i === 'object').map(i => ({ id: str(i.id) || uid(), text: str(i.text), done: !!i.done })).filter(i => i.text) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     expenses: x => ({ ...x, id: str(x.id) || uid(), name: str(x.name), categoryId: str(x.categoryId) || 'other', planned: numOrNull(x.planned), paid: numOrNull(x.paid), dueDate: date(x.dueDate), comment: str(x.comment), source: link(x.source), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
@@ -112,12 +118,15 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
       reminderId: idOrNull(x.reminderId), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     purchases: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title), supplierId: x.supplierId ? str(x.supplierId) : null, status: pick(x.status, PURCHASE_STATUSES, 'planned'), expectedDate: date(x.expectedDate),
       firstPurchase: !!x.firstPurchase,
-      items: Array.isArray(x.items) ? x.items.filter(i => i && typeof i === 'object').map(i => ({ ...i, id: str(i.id) || uid(), productId: i.productId ? str(i.productId) : null, name: str(i.name), qty: numOrNull(i.qty), unitPrice: numOrNull(i.unitPrice), retailPrice: numOrNull(i.retailPrice) })).filter(i => i.name || i.productId) : [],
-      deliveryCost: numOrNull(x.deliveryCost), discountPct: pct(x.discountPct), expenseId: x.expenseId ? str(x.expenseId) : null, comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+      items: Array.isArray(x.items) ? x.items.filter(i => i && typeof i === 'object').map(i => ({ ...i, id: str(i.id) || uid(), productId: i.productId ? str(i.productId) : null, name: str(i.name), qty: numOrNull(i.qty), unitPrice: numOrNull(i.unitPrice), retailPrice: numOrNull(i.retailPrice), size: str(i.size).trim().slice(0, 40), color: str(i.color).trim().slice(0, 40) })).filter(i => i.name || i.productId) : [],
+      deliveryCost: numOrNull(x.deliveryCost), discountPct: pct(x.discountPct), stockMode: x.stockMode === 'legacy' ? 'legacy' : 'auto', receivedDate: date(x.receivedDate), expenseId: x.expenseId ? str(x.expenseId) : null, comment: str(x.comment), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     reminders: x => { const r = { ...x, id: str(x.id) || uid(), title: str(x.title), note: str(x.note), date: date(x.date), time: /^\d{2}:\d{2}$/.test(x.time || '') ? x.time : '09:00', repeat: pick(x.repeat, REPEATS, 'none'), status: pick(x.status, REMINDER_STATUSES, 'planned'),
       snoozedUntil: x.snoozedUntil && !isNaN(new Date(x.snoozedUntil)) ? x.snoozedUntil : null, link: x.link && LINK_TYPES[x.link.type] && x.link.id ? { type: x.link.type, id: str(x.link.id) } : null, createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) };
       r.fireAt = fireAt(r); return r; },
     cart: x => normalizeCartRecord({ ...x, id: str(x.id) || uid(), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
+    moves: x => ({ ...x, id: str(x.id) || uid(), type: pick(x.type, MOVE_TYPES, 'adjust'), productId: str(x.productId), size: str(x.size).trim().slice(0, 40), color: str(x.color).trim().slice(0, 40),
+      qty: numOrNull(x.qty), direction: x.direction === 'out' ? 'out' : 'in', unitCost: numOrNull(x.unitCost), unitPrice: numOrNull(x.unitPrice), resellable: x.resellable !== false,
+      supplierId: idOrNull(x.supplierId), reason: str(x.reason).slice(0, 300), note: str(x.note).slice(0, 500), date: date(x.date) || ts(x.createdAt).slice(0, 10), createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
     chats: x => ({ ...x, id: str(x.id) || uid(), title: str(x.title) || 'Розмова', messages: Array.isArray(x.messages) ? x.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant')) : [], createdAt: ts(x.createdAt), updatedAt: ts(x.updatedAt) }),
   };
 
@@ -131,6 +140,7 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
       settings: {
         ...base.settings, ...s,
         totalBudget: numOrNull(s.totalBudget),
+        stockMin: nonNeg(s.stockMin) ?? 3,
         storeOpened: !!s.storeOpened,
         budgetCategories: cats.filter(c => c && c.id && c.name).map(c => ({ ...c, id: str(c.id), name: str(c.name), builtin: !!c.builtin, refundable: !!c.refundable })),
         productCategories: Array.isArray(s.productCategories) ? strArr(s.productCategories) : base.settings.productCategories,
@@ -147,7 +157,7 @@ const FILE_PATH = /^[\w-]+\/[\w-]+\/[\w-]+\.(jpg|jpeg|png|webp|pdf|heic)$/;
     const catIds = new Set(out.settings.budgetCategories.map(c => c.id));
     out.expenses.forEach(e => { if (!catIds.has(e.categoryId)) e.categoryId = 'other'; });
     const supIds = new Set(out.suppliers.map(s => s.id));
-    [...out.products, ...out.notes, ...out.purchases].forEach(r => { if (r.supplierId && !supIds.has(r.supplierId)) r.supplierId = null; });
+    [...out.products, ...out.notes, ...out.purchases, ...out.moves].forEach(r => { if (r.supplierId && !supIds.has(r.supplierId)) r.supplierId = null; });
     // Розділ постачальника, якого вже немає (або товар перейшов до іншого постачальника), — «Без розділу».
     const secIds = new Map(out.suppliers.map(s => [s.id, new Set(s.sections.map(x => x.id))]));
     out.products.forEach(p => { if (p.supplierSectionId && !secIds.get(p.supplierId)?.has(p.supplierSectionId)) p.supplierSectionId = null; });

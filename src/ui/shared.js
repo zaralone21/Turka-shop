@@ -9,7 +9,7 @@ import { daysFromToday, esc, fmtDate, plural } from '../core/utils.js';
 export const PAGES = [
   ['home', 'Головна'], ['planner', 'Завдання'], ['reminders', 'Нагадування'], ['ai', 'AI-менеджер'],
   ['opening', 'План відкриття'], ['premises', 'Приміщення'], ['fitout', 'Облаштування'],
-  ['suppliers', 'Постачальники'], ['products', 'Товари та ціни'], ['purchases', 'Закупівлі'], ['notes', 'Нотатки'],
+  ['suppliers', 'Постачальники'], ['products', 'Товари та ціни'], ['stock', 'Товари в наявності'], ['purchases', 'Закупівлі'], ['notes', 'Нотатки'],
   ['budget', 'Бюджет відкриття'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість'],
   ['data', 'Дані й акаунт'],
   ['payments', 'Платежі'], ['firstbuy', 'Перша закупівля'], ['cart', 'Кошик закупівель'],
@@ -19,12 +19,13 @@ export const SECTIONS = {
   planner: { name: 'Справи', tabs: [['planner', 'Завдання'], ['reminders', 'Нагадування']] },
   opening: { name: 'Відкриття', tabs: [['opening', 'План відкриття'], ['premises', 'Приміщення'], ['fitout', 'Облаштування']] },
   finance: { name: 'Фінанси', tabs: [['budget', 'Бюджет відкриття'], ['payments', 'Платежі'], ['monthly', 'Щомісячні витрати'], ['breakeven', 'Беззбитковість']] },
+  products: { name: 'Товари', tabs: [['products', 'Товари та ціни'], ['stock', 'Товари в наявності']] },
   purchases: { name: 'Закупівлі', tabs: [['purchases', 'Усі закупівлі'], ['cart', 'Кошик'], ['firstbuy', 'Перша закупівля']] },
 };
 /* Основне меню: [id розділу або сторінки, назва, іконка]. */
 export const NAV = [
   ['home', 'Огляд', 'home'], ['planner', 'Справи', 'planner'], ['opening', 'Відкриття магазину', 'premises'],
-  ['suppliers', 'Постачальники', 'suppliers'], ['products', 'Товари та ціни', 'products'], ['purchases', 'Закупівлі', 'purchases'], ['notes', 'Нотатки', 'notes'],
+  ['suppliers', 'Постачальники', 'suppliers'], ['products', 'Товари', 'products'], ['purchases', 'Закупівлі', 'purchases'], ['notes', 'Нотатки', 'notes'],
   ['finance', 'Фінанси', 'budget'], ['ai', 'AI-менеджер', 'ai'],
 ];
 /** До якого розділу з вкладками належить сторінка (або null). */
@@ -37,7 +38,7 @@ export function resolvePage(id) {
 export const UI = {
   page: 'home', lastTab: {}, supplierId: null, premisesId: null, regroupHidden: false, keepScroll: true, aiOpen: false, chatId: null,
   openCl: new Set(),
-  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', prodQuick: '', supCat: '', fitCat: '', fitStatus: '', noteQ: '', noteTag: '', taskStatus: '', taskPrio: '', purStatus: '', remShowDone: false, supSec: '', supSecFor: '', supProdQ: '' },
+  f: { supQ: '', supStatus: '', prodQ: '', prodCat: '', prodSub: '', prodSort: 'name', prodSup: '', prodQuick: '', supCat: '', fitCat: '', fitStatus: '', noteQ: '', noteTag: '', taskStatus: '', taskPrio: '', purStatus: '', remShowDone: false, supSec: '', supSecFor: '', supProdQ: '', stockQ: '', stockCat: '', stockSup: '', stockAvail: 'in', stockSort: 'name' },
 };
 export const root = document.getElementById('root');
 export const D = () => Repo.data;

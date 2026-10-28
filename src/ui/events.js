@@ -10,6 +10,7 @@ import { budgetCatsModal, deleteSupplier, regroupDialog, sectionsForm, expenseFo
 import { deletePhotos } from './photos.js';
 import { CART_ACTIONS, CART_CHANGE, bindCartRender } from './views/cart.js';
 import { SUPSEC_ACTIONS } from './views/supplierSections.js';
+import { STOCK_ACTIONS } from './views/stock.js';
 import { AI } from './ai.js';
 import { PUSH_ACTIONS, openNotifCenter } from './notifications.js';
 import { closeModal, isGhostTap, confirmDialog, modalEl, openModal } from './modal.js';
@@ -48,6 +49,8 @@ export const ACTIONS = {
   'prod-quick': el => { UI.f.prodQuick = el.dataset.v; render(); },
   'quick-retail': el => quickRetail(el.dataset.id),
   ...CART_ACTIONS,
+  ...STOCK_ACTIONS,
+  'stock-avail': el => { UI.f.stockAvail = el.dataset.v; render(); },
   'sup-sec': el => { SUPSEC_ACTIONS['sup-sec'](el); render(); },
   'sup-sec-manage': SUPSEC_ACTIONS['sup-sec-manage'], 'sup-sec-move': SUPSEC_ACTIONS['sup-sec-move'],
   'go-cart': () => { CART_ACTIONS['go-cart'](); go('cart'); },
@@ -108,7 +111,8 @@ export function moreSheet() {
     } });
 }
 export function quickAddSheet() { sheet('Швидко додати', [[0, 'task', 'Завдання', () => taskForm()], [0, 'reminders', 'Нагадування', () => reminderForm()], [0, 'note', 'Нотатку', () => noteForm()], [0, 'suppliers', 'Постачальника', () => supplierForm()], [0, 'products', 'Товар', () => productForm()], [0, 'purchases', 'Закупівлю', () => purchaseForm()], [0, 'expense', 'Витрату', () => expenseForm()], [0, 'fitout', 'Облаштування', () => ACTIONS['add-fitout']()]]); }
-Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS); AI.go = go; AI.bindRender(render); bindCartRender(render);
+Object.assign(ACTIONS, AI.actions, PUSH_ACTIONS);
+Object.assign(STOCK_ACTIONS, { productView: id => productView(id), purchaseForm: id => purchaseForm(id), openSupplier: id => ACTIONS['open-supplier']({ dataset: { id } }) }); AI.go = go; AI.bindRender(render); bindCartRender(render);
 /* Розгорнутий чекліст лишається розгорнутим після перемальовування сторінки. */
 document.addEventListener('toggle', e => { const el = e.target; if (el.matches && el.matches('details[data-cl]')) UI.openCl[el.open ? 'add' : 'delete'](el.dataset.cl); }, true);
 document.addEventListener('click', e => {

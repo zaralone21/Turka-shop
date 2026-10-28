@@ -39,7 +39,7 @@ describe('міграція старих даних до v3', () => {
     expect(r.version).toBe(2);
     const d = r.data;
     expect(d.schemaVersion).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(3);
+    expect(SCHEMA_VERSION).toBe(4);
     for (const k of ['suppliers', 'products', 'notes', 'tasks', 'expenses', 'purchases', 'reminders']) expect(d[k].length).toBe(src[k].length);
     expect(d.premises).toEqual([]); expect(d.fitout).toEqual([]); expect(d.monthly).toEqual([]);
     expect(d.suppliers[0].futureField).toBe(7);

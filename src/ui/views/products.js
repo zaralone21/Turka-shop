@@ -5,6 +5,8 @@ import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, emptyState, supplierName, moreMenu } from '../shared.js';
 import { svg } from '../shell.js';
 import { cartButton, cartControl } from './cart.js';
+import { supLinks } from './stock.js';
+import { stockLedger } from '../../core/stock.js';
 
 /* ---------- 3. Товари ---------- */
 export const DIFF_HINT = 'Роздрібна ціна мінус закупівельна ціна за одиницю, без урахування інших витрат';
@@ -17,7 +19,10 @@ export const prodView = () => { try { return ['list', 'table'].includes(localSto
 const metrics = p => { const cost = Calc.unitCost(p), d = Calc.diff(cost, p.retailPrice);
   return { cost, d, mg: Calc.margin(cost, p.retailPrice), tone: !isNum(d) ? '' : d > 0 ? 'pos' : d < 0 ? 'neg' : 'zero' }; };
 const quickBtn = (p, cls, label) => `<button type="button" class="${cls}" data-act="quick-retail" data-id="${p.id}" aria-label="${esc(label)}: ${esc(p.name)}">${label}</button>`;
-const supLabel = p => esc(p.supplierId ? supplierName(p.supplierId) : 'Постачальник не вказаний');
+/* Постачальники товару: із картки та з отриманих партій (усі, без заміни історії останнім). */
+let ledger = null;
+const supIds = p => { const s = ledger && ledger.products.get(p.id); return [...new Set([...(p.supplierId ? [p.supplierId] : []), ...(s ? s.suppliers : [])])]; };
+const supLabel = p => supLinks(supIds(p), null, { short: true });
 const openAttrs = p => `role="button" tabindex="0" data-act="view-product" data-id="${p.id}" aria-label="Відкрити товар ${esc(p.name)}"`;
 function productCards(list) {
   return `<div class="product-gallery">${list.map(p => { const { cost, d, mg, tone } = metrics(p);
@@ -30,11 +35,12 @@ function productCards(list) {
   }).join('')}</div>`;
 }
 function productList(list) {
-  return `<div class="prod-list" role="list"><div class="pl-head" aria-hidden="true"><span></span><span>Товар</span><span>Закупівля / од.</span><span>Роздріб</span><span title="${DIFF_HINT}">Різниця / од.</span><span>Маржа</span></div>
+  return `<div class="prod-list" role="list"><div class="pl-head" aria-hidden="true"><span></span><span>Товар</span><span>Постачальник</span><span>Закупівля / од.</span><span>Роздріб</span><span title="${DIFF_HINT}">Різниця / од.</span><span>Маржа</span></div>
   ${list.map(p => { const { cost, d, mg, tone } = metrics(p);
     return `<article class="pl-row ${tone}" role="listitem"><div class="pl-open" ${openAttrs(p)}>
       <span class="pl-main"><span class="pl-photo">${p.photos?.length ? photoImg(p.photos[0], '', p.name) : svg('products')}</span>
-      <span class="pl-name"><b title="${esc(p.name)}">${esc(p.name)}</b><span class="pl-sup">${supLabel(p)}</span></span></span>
+      <span class="pl-name"><b title="${esc(p.name)}">${esc(p.name)}</b><span class="pl-sup only-m">${supLabel(p)}</span></span></span>
+      <span class="pl-v pl-supc hide-m"><span class="k">Постачальник</span>${supLabel(p)}</span>
       <span class="pl-v pl-cost"><span class="k">Закупівля / од.</span><b>${isNum(cost) ? fmtMoney(cost) : '<i class="none">Не задано</i>'}</b>${p.priceType === 'pack' && isNum(cost) ? `<span class="pl-note">уп. ${fmtNum(p.packQty)} шт</span>` : ''}</span>
       <span class="pl-v pl-retail"><span class="k">Роздріб</span><b>${isNum(p.retailPrice) ? fmtMoney(p.retailPrice) : '<i class="none">Не задано</i>'}</b></span>
       <span class="pl-v pl-diff" title="${DIFF_HINT}"><span class="k">Різниця / од.</span><b>${isNum(d) ? signedMoney(d) : '—'}</b></span>
@@ -43,6 +49,7 @@ function productList(list) {
   }).join('')}</div>`;
 }
 export function productTable(list) {
+  ledger = stockLedger(D());
   return prodView() === 'list' ? productList(list) : productCards(list);
 }
 const QUICK = {
@@ -55,14 +62,15 @@ VIEWS.products = () => {
   const d = D(); const q = UI.f.prodQ.trim().toLowerCase(); const sections = d.settings.sections;
   const order = sectionOrder(sections, d.products);
   if (UI.f.prodCat && UI.f.prodCat !== NO_SECTION && !order.includes(UI.f.prodCat)) UI.f.prodCat = '';
-  const base = d.products.filter(p => (!UI.f.prodSup || (UI.f.prodSup === '__none' ? !p.supplierId : p.supplierId === UI.f.prodSup))
-    && (!q || [p.name, p.sku, p.comment, p.colors, p.sizes, p.category, p.subcategory, supplierName(p.supplierId)].join(' ').toLowerCase().includes(q)));
+  ledger = stockLedger(d);
+  const base = d.products.filter(p => (!UI.f.prodSup || (UI.f.prodSup === '__none' ? !supIds(p).some(supplierName) : supIds(p).includes(UI.f.prodSup)))
+    && (!q || [p.name, p.sku, p.comment, p.colors, p.sizes, p.category, p.subcategory, ...supIds(p).map(supplierName)].join(' ').toLowerCase().includes(q)));
   const inCat = UI.f.prodCat === NO_SECTION ? base.filter(p => !p.category) : UI.f.prodCat ? base.filter(p => p.category === UI.f.prodCat) : base;
   const subs = UI.f.prodCat && UI.f.prodCat !== NO_SECTION ? [...new Set([...(sections.find(s => s.name === UI.f.prodCat)?.subs || []), ...inCat.map(p => p.subcategory).filter(Boolean)])] : [];
   if (!subs.includes(UI.f.prodSub) && UI.f.prodSub !== NO_SECTION) UI.f.prodSub = '';
   const inSub = UI.f.prodSub === NO_SECTION ? inCat.filter(p => !p.subcategory) : UI.f.prodSub ? inCat.filter(p => p.subcategory === UI.f.prodSub) : inCat;
   const list = QUICK[UI.f.prodQuick] ? inSub.filter(QUICK[UI.f.prodQuick]) : inSub;
-  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін без складського обліку.</p></div><div class="row">${cartButton()}${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
+  const head = `<div class="page-head"><div><p>${d.products.length} ${plural(d.products.length, 'товар', 'товари', 'товарів')}. Довідник цін. Залишки — на вкладці «Товари в наявності».</p></div><div class="row">${cartButton()}${moreMenu([['edit-sections', 'Розділи й підрозділи'], ['regroup', 'Розкласти по розділах']])}<button class="btn primary hide-m" data-act="add-product">+ Додати товар</button></div></div>`;
   if (!d.products.length) return head + emptyState('Додайте товар з ціною закупівлі та плановою роздрібною ціною, і націнка з маржею порахуються автоматично.', 'add-product', 'Додати перший товар') + FORMULAS;
   const plan = planRegroup(d), toMove = plan.products.length + plan.suppliers.length;
   const noCat = base.filter(p => !p.category).length;
@@ -73,7 +81,7 @@ VIEWS.products = () => {
   return head + `
   <div class="toolbar">
     <label class="search">${svg('search')}<input class="input" id="f-prodQ" data-filter="prodQ" placeholder="Пошук: назва, артикул, коментар…" value="${esc(UI.f.prodQ)}" aria-label="Пошук товарів"></label>
-    <select class="input" id="f-prodSup" data-filter="prodSup" aria-label="Постачальник"><option value="">Усі постачальники</option><option value="__none" ${UI.f.prodSup === '__none' ? 'selected' : ''}>Без постачальника</option>${[...d.suppliers].sort((a, b) => byText(a.name, b.name)).map(s => `<option value="${s.id}" ${UI.f.prodSup === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+    <select class="input" id="f-prodSup" data-filter="prodSup" aria-label="Постачальник"><option value="">Усі постачальники</option><option value="__none" ${UI.f.prodSup === '__none' ? 'selected' : ''}>Не вказано</option>${[...d.suppliers].sort((a, b) => byText(a.name, b.name)).map(s => `<option value="${s.id}" ${UI.f.prodSup === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
     <span class="sort-view"><select class="input" id="f-prodSort" data-filter="prodSort" aria-label="Сортування">${SORTS.map(([k, t]) => `<option value="${k}" ${UI.f.prodSort === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
     <span class="view-seg" role="group" aria-label="Вигляд каталогу">${[['cards', 'Картки'], ['list', 'Список']].map(([k, t]) => `<button type="button" data-act="prod-view" data-v="${k}" aria-pressed="${view === k}">${t}</button>`).join('')}</span></span>
   </div>
