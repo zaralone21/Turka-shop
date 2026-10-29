@@ -5,6 +5,7 @@ import { photoImg } from '../photos.js';
 import { D, UI, VIEWS, emptyState, supplierName, moreMenu } from '../shared.js';
 import { svg } from '../shell.js';
 import { cartButton, cartControl } from './cart.js';
+import { unitShort } from '../../core/cart.js';
 import { supLinks } from './stock.js';
 import { stockLedger } from '../../core/stock.js';
 
@@ -41,7 +42,7 @@ function productList(list) {
       <span class="pl-main"><span class="pl-photo">${p.photos?.length ? photoImg(p.photos[0], '', p.name) : svg('products')}</span>
       <span class="pl-name"><b title="${esc(p.name)}">${esc(p.name)}</b><span class="pl-sup only-m">${supLabel(p)}</span></span></span>
       <span class="pl-v pl-supc hide-m"><span class="k">Постачальник</span>${supLabel(p)}</span>
-      <span class="pl-v pl-cost"><span class="k">Закупівля / од.</span><b>${isNum(cost) ? fmtMoney(cost) : '<i class="none">Не задано</i>'}</b>${p.priceType === 'pack' && isNum(cost) ? `<span class="pl-note">уп. ${fmtNum(p.packQty)} шт</span>` : ''}</span>
+      <span class="pl-v pl-cost"><span class="k">Закупівля / од.</span><b>${isNum(cost) ? fmtMoney(cost) : '<i class="none">Не задано</i>'}</b>${p.priceType === 'pack' && isNum(cost) ? `<span class="pl-note">уп. ${fmtNum(p.packQty)} ${unitShort(p.unit)}</span>` : ''}</span>
       <span class="pl-v pl-retail"><span class="k">Роздріб</span><b>${isNum(p.retailPrice) ? fmtMoney(p.retailPrice) : '<i class="none">Не задано</i>'}</b></span>
       <span class="pl-v pl-diff" title="${DIFF_HINT}"><span class="k">Різниця / од.</span><b>${isNum(d) ? signedMoney(d) : '—'}</b></span>
       <span class="pl-v pl-margin"><span class="k">Маржа</span><b>${isNum(mg) ? signedPct(mg) : '—'}</b></span></div>

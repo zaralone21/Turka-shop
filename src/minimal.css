@@ -239,7 +239,7 @@ button.chip.on, .sec-chips .chip.on { background: var(--surface-accent); color: 
 .panel .payment-total { font-size: 30px; margin: 9px 0 16px; }
 .change-row { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 19px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .change-row > small { color: var(--text-muted); font-size: 10px; }
-.buying-head, .buying-edit .r { grid-template-columns: minmax(170px, 1fr) 70px 110px 110px 32px; }
+.buying-head, .buying-edit .r { grid-template-columns: minmax(160px, 1fr) 64px 60px 168px 96px 32px; }
 .buying-head { font-size: 10px; }
 .firstbuy-table { margin-top: 14px; }
 .firstbuy-table table.t { font-size: 12px; min-width: 570px; }
@@ -286,9 +286,11 @@ button.chip.on, .sec-chips .chip.on { background: var(--surface-accent); color: 
   .payment-row { flex-wrap: wrap; gap: 10px; }
   .payment-row > div { flex-basis: 60%; }
   .buying-head { display: none; }
-  .buying-edit .r { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .buying-edit .r { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--border); }
   .buying-edit .r > .field { grid-column: 1/-1; }
-  .buying-edit .r > .btn { justify-self: end; grid-column: 3; }
+  .buying-edit .r > .i-price { grid-column: span 2; }
+  .buying-edit .r > [data-i-retail] { grid-column: span 3; }
+  .buying-edit .r > .btn { justify-self: end; grid-column: 4; }
   .pt-row > .btn { max-width: 150px; white-space: normal; }
   .desk-layout .panel { padding: 18px; }
   .desk-balance { font-size: 32px; }
@@ -395,3 +397,10 @@ table.t td.bad { color: var(--danger); }
 .stk-table .acts { width: 1%; }
 .stk-table .acts .btn { display: flex; width: 100%; justify-content: center; }
 .stk-table .acts .btn + .btn { margin-top: 4px; }
+
+/* Позиція закупівлі в упаковках */
+.i-price { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 4px; }
+.i-price select.input { padding-left: 8px; padding-right: 20px; font-size: 12.5px; }
+.buying-edit .r > .i-calc { grid-column: 1 / -1; margin-top: -2px; min-height: 0; }
+.buying-edit .r > .i-calc:empty { display: none; }
+.i-calc.bad { color: var(--danger); }

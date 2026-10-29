@@ -13,6 +13,17 @@ export const Calc = {
     if (p.priceType === 'pack') return isNum(p.packQty) && p.packQty > 0 ? p.purchasePrice / p.packQty : null;
     return p.purchasePrice;
   },
+  /**
+   * Позиція закупівлі в упаковках: packs упаковок по packQty одиниць, ціна price за упаковку чи одиницю (priceFor).
+   * Повертає кількість одиниць (штук/пар), ціну однієї одиниці й суму. 2 уп. × 12 пар по 240 ₴ → 24 пари, 20 ₴/пара, 480 ₴.
+   */
+  packLine({ packs, packQty, price, priceFor }) {
+    const per = isNum(packQty) && packQty >= 1 ? packQty : 1;
+    const qty = isNum(packs) ? Math.round(packs * per * 1e6) / 1e6 : null;
+    const unitPrice = isNum(price) ? (priceFor === 'pack' ? price / per : price) : null;
+    const sum = isNum(price) && isNum(packs) ? Math.round((priceFor === 'pack' ? packs * price : qty * price) * 100) / 100 : null;
+    return { qty, unitPrice, sum, packQty: per };
+  },
   /** Націнка = (роздрібна − закупівельна) / закупівельна × 100 */
   /** Різниця на одиниці = роздрібна − закупівельна за одиницю (без інших витрат). */
   diff(cost, retail) { return isNum(cost) && isNum(retail) ? retail - cost : null; },
