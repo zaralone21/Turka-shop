@@ -1,3 +1,4 @@
+import { enhanceLongSelects } from './combo.js';
 import { byText, esc, fmtDate, isNum, parseNum } from '../core/utils.js';
 import { D, root } from './shared.js';
 import { svg } from './shell.js';
@@ -65,7 +66,8 @@ export function openModal({ title, body, foot, narrow, wide, onMount, onClose })
   document.body.appendChild(modalEl);
   wireSheet(modalEl);
   onMount && onMount(modalEl);
-  const first = modalEl.querySelector('input:not([type=hidden]):not(.sr), textarea, select, .modal-f .btn'); first && first.focus({ preventScroll: true });
+  enhanceLongSelects(modalEl);
+  const first = modalEl.querySelector('input:not([type=hidden]):not(.sr):not(.combo-in), textarea, select:not(.combo-native), .modal-f .btn'); first && first.focus({ preventScroll: true });
 }
 /** Підтвердження всередині сторінки (системні confirm() тут не працюють). */
 export function confirmDialog({ title, text, ok = 'Видалити', danger = true }) {

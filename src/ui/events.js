@@ -36,6 +36,8 @@ export const ACTIONS = {
   'add-supplier': () => supplierForm(), 'edit-supplier': el => supplierForm(el.dataset.id), 'del-supplier': el => deleteSupplier(el.dataset.id),
   'open-supplier': el => { if (UI.f.supSecFor !== el.dataset.id) Object.assign(UI.f, { supSecFor: el.dataset.id, supSec: '', supProdQ: '' }); UI.supplierId = el.dataset.id; go('suppliers'); UI.supplierId = el.dataset.id; render(); },
   'back-suppliers': () => { UI.supplierId = null; render(); },
+  'sup-hide-products': async el => { const s = Repo.get('suppliers', el.dataset.id); if (!s) return; const hide = !s.productsHidden; await Repo.update('suppliers', s.id, { productsHidden: hide });
+    toast(hide ? `Товари «${s.name}» приховано з вибору товару` : `Товари «${s.name}» знову показуються`, null, hide ? () => Repo.update('suppliers', s.id, { productsHidden: false }) : null); },
   'supplier-checked': async el => { await Repo.update('suppliers', el.dataset.id, { checkedAt: todayISO() }); toast('Дату перевірки оновлено'); },
   'add-product': el => productForm(null, el.dataset.supplier, { section: el.dataset.section }), 'edit-product': el => productForm(el.dataset.id), 'view-product': el => productView(el.dataset.id),
   'del-product': async el => { const p = Repo.get('products', el.dataset.id); const n = (p.photos || []).length; if (await confirmDialog({ title: 'Видалити товар?', text: `<p style="margin:0">«${esc(p.name)}» буде видалено${n ? ` разом із фото (${n})` : ''}.</p>` })) { await Repo.remove('products', p.id); deletePhotos(p.photos); toast('Товар видалено'); } },

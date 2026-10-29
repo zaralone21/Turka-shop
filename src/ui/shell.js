@@ -1,3 +1,4 @@
+import { COMBO_MIN, enhanceSelect } from './combo.js';
 import { Cloud } from '../core/cloud.js';
 import { isDue } from '../core/reminders.js';
 import { Repo } from '../core/repo.js';
@@ -172,6 +173,8 @@ export function render() {
   restoreEditing(keep);
   hydratePhotos(root);
   hydrateFiles(root);
+  // Довгі фільтри сторінки (наприклад, постачальники) — з пошуком.
+  root.querySelectorAll('select[data-filter]').forEach(s => { if (s.options.length > COMBO_MIN) enhanceSelect(s); });
 }
 /** Одна назва сторінки; для розділів із вкладками — назва розділу й вкладки. */
 function pageHead() {

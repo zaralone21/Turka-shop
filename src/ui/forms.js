@@ -3,7 +3,7 @@ import { Repo } from '../core/repo.js';
 import { Schema } from '../core/schema.js';
 import { freeExpensesForPurchase, purchaseAmount, purchaseLink } from '../core/opening.js';
 import { planRegroup, sectionsToText, textToSections } from '../core/sections.js';
-import { SEC_ALL, SEC_NONE, filterBySection, sectionCounts, sectionIdOf, sectionsOf } from '../core/supplierSections.js';
+import { SEC_ALL, SEC_NONE, filterBySection, pickableProducts, sectionCounts, sectionIdOf, sectionsOf } from '../core/supplierSections.js';
 import { assertStock, countsInStock, planReceipt, stockRows, variantLabel } from '../core/stock.js';
 import { once, syncExpensePlanned } from './budgetSync.js';
 import { REPEATS, SNOOZE_OPTIONS, completeChanges, snoozeChanges } from '../core/reminders.js';
@@ -544,7 +544,7 @@ export function purchaseForm(id, preset = {}) {
   const supOf = () => { const id2 = document.getElementById('fld-supplierId')?.value; return id2 ? Repo.get('suppliers', id2) : null; };
   /** Варіанти товару: товари вибраного постачальника згруповано за його розділами, решта — окремою групою. */
   const prodOptions = (sel, sup) => {
-    const all = [...D().products].sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+    const all = pickableProducts(D(), { keep: [sel], supplierId: sup && sup.id }).sort((a, b) => a.name.localeCompare(b.name, 'uk'));
     const opt = x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}${x.supplierId && (!sup || x.supplierId !== sup.id) ? ' · ' + esc(Repo.get('suppliers', x.supplierId)?.name || '') : ''}</option>`;
     if (!sup) return `<option value="">— вільна позиція —</option>${all.map(opt).join('')}`;
     const own = all.filter(x => x.supplierId === sup.id), other = all.filter(x => x.supplierId !== sup.id);
@@ -558,7 +558,7 @@ export function purchaseForm(id, preset = {}) {
     const price = isNum(i.agreedPrice) && i.priceFor ? i.agreedPrice : isNum(i.unitPrice) ? (priceFor === 'pack' ? Math.round(i.unitPrice * per * 100) / 100 : i.unitPrice) : null;
     return { per, priceFor, packs, price };
   };
-  const row = (i, sup) => { const s = shown(i); return `<div class="r" data-item="${esc(i.id)}"><div class="field" style="gap:4px"><select class="input" data-i-prod aria-label="Товар">${prodOptions(i.productId, sup)}</select><input class="input" data-i-name placeholder="Назва позиції" value="${esc(i.name || '')}" aria-label="Назва позиції" ${i.productId ? 'hidden' : ''}><div class="i-var"><input class="input" data-i-size placeholder="Розмір" value="${esc(i.size || '')}" aria-label="Розмір" maxlength="40"><input class="input" data-i-color placeholder="Колір" value="${esc(i.color || '')}" aria-label="Колір" maxlength="40"></div></div>
+  const row = (i, sup) => { const s = shown(i); return `<div class="r" data-item="${esc(i.id)}"><div class="field" style="gap:4px"><select class="input" data-i-prod data-search aria-label="Товар">${prodOptions(i.productId, sup)}</select><input class="input" data-i-name placeholder="Назва позиції" value="${esc(i.name || '')}" aria-label="Назва позиції" ${i.productId ? 'hidden' : ''}><div class="i-var"><input class="input" data-i-size placeholder="Розмір" value="${esc(i.size || '')}" aria-label="Розмір" maxlength="40"><input class="input" data-i-color placeholder="Колір" value="${esc(i.color || '')}" aria-label="Колір" maxlength="40"></div></div>
     <input class="input num" data-i-qty inputmode="decimal" placeholder="Упаковок" value="${num(s.packs)}" aria-label="Кількість упаковок"><input class="input num" data-i-pack inputmode="numeric" placeholder="В уп." value="${num(s.per)}" aria-label="Одиниць в упаковці"><div class="i-price"><input class="input num" data-i-price inputmode="decimal" placeholder="₴" value="${num(s.price)}" aria-label="Закупівельна ціна"><select class="input" data-i-for aria-label="Ціна вказана"><option value="unit" ${s.priceFor === 'unit' ? 'selected' : ''}>за од.</option><option value="pack" ${s.priceFor === 'pack' ? 'selected' : ''}>за уп.</option></select></div><input class="input num" data-i-retail inputmode="decimal" placeholder="Роздріб ₴" value="${num(i.retailPrice)}" aria-label="Роздрібна ціна за одиницю"><button type="button" class="btn sm ghost" data-i-del aria-label="Видалити позицію">✕</button><div class="i-calc small muted" data-i-calc aria-live="polite"></div></div>`; };
   /** Значення рядка позиції: упаковки × одиниць в упаковці = одиниці; ціна одиниці — з ціни упаковки, якщо так вказано. */
   const rowVals = r => {

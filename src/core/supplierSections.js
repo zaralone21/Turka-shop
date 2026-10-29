@@ -53,3 +53,11 @@ export function planSections(current, rows) {
   const keep = new Set(sections.map(x => x.id));
   return { ok: !errors.length, errors, sections, removed: current.filter(x => !keep.has(x.id)) };
 }
+
+/** Постачальники, чиї товари приховано з вибору товару (операції, закупівлі). Каталог і залишки їх показують. */
+export const hiddenSuppliers = d => new Set(d.suppliers.filter(s => s.productsHidden).map(s => s.id));
+/** Товари для вибору: без прихованих постачальників; keep — id, які лишаються завжди (вже вибрані, свій постачальник). */
+export function pickableProducts(d, { keep = [], supplierId = null } = {}) {
+  const hid = hiddenSuppliers(d), k = new Set(keep.filter(Boolean));
+  return d.products.filter(p => k.has(p.id) || !p.supplierId || !hid.has(p.supplierId) || p.supplierId === supplierId);
+}

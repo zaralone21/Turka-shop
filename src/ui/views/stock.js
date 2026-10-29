@@ -1,6 +1,7 @@
 import { Calc } from '../../core/calc.js';
 import { unitOf, unitWord } from '../../core/cart.js';
 import { Repo } from '../../core/repo.js';
+import { pickableProducts } from '../../core/supplierSections.js';
 import { DEFAULT_MIN, MOVE_TYPES, assertStock, markupOf, moveSign, planReceipt, retailFromMarkup, stockLedger, stockRows, stockTotals, variantKey, variantLabel } from '../../core/stock.js';
 import { byText, esc, fmtDate, fmtMoney, fmtNum, isNum, parseNum, plural, signedMoney, signedPct, todayISO, uid } from '../../core/utils.js';
 import { F, closeModal, confirmDialog, dateField, formModal, g, openModal } from '../modal.js';
@@ -155,7 +156,8 @@ const IN_TYPES = new Set(['return']);
 export function moveForm(id, preset = {}, back) {
   const old = id ? Repo.get('moves', id) : null;
   const v = old || { type: preset.type || 'sale', productId: preset.productId || '', qty: null, date: todayISO(), direction: 'in', resellable: true };
-  const prods = [...D().products].sort((a, b) => byText(a.name, b.name));
+  const prods = pickableProducts(D(), { keep: [v.productId] }).sort((a, b) => byText(a.name, b.name));
+  const hiddenN = D().products.length - pickableProducts(D(), { keep: [v.productId] }).length;
   const vOpts = pid => {
     const s = stockLedger(D()).products.get(pid); const list = s ? s.variants : [];
     const cur = variantKey(v.size, v.color);
@@ -167,7 +169,7 @@ export function moveForm(id, preset = {}, back) {
   formModal({
     title: old ? 'Операція з товаром' : 'Нова операція', onClose: back,
     fields: `${F.select('type', 'Операція', v.type, typeOpts)}
-      <label class="field"><span class="lbl">Товар *</span><select class="input" name="productId" id="fld-productId"><option value="">— виберіть товар —</option>${prods.map(p => `<option value="${p.id}" ${p.id === v.productId ? 'selected' : ''}>${esc(p.name)}${p.sku ? ' · ' + esc(p.sku) : ''}</option>`).join('')}</select></label>
+      <label class="field"><span class="lbl">Товар *</span><select class="input" name="productId" id="fld-productId" data-search><option value="">— виберіть товар —</option>${prods.map(p => `<option value="${p.id}" ${p.id === v.productId ? 'selected' : ''}>${esc(p.name)}${p.sku ? ' · ' + esc(p.sku) : ''}</option>`).join('')}</select>${hiddenN ? `<span class="hint">Приховано ${hiddenN} ${plural(hiddenN, 'товар', 'товари', 'товарів')} постачальників, у яких товари сховано. Повернути — кнопкою «Показати товари» в постачальника.</span>` : ''}</label>
       <label class="field"><span class="lbl">Розмір / колір</span><select class="input" name="variant" id="fld-variant"></select></label>
       <div class="field mv-new" id="mv-new" hidden><span class="lbl">Новий варіант</span><div class="i-var"><input class="input" name="size" placeholder="Розмір" maxlength="40" value="${esc(old ? old.size : '')}"><input class="input" name="color" placeholder="Колір" maxlength="40" value="${esc(old ? old.color : '')}"></div></div>
       <div class="field" data-for="adjust"><span class="lbl">Напрям</span><div class="seg" role="radiogroup"><label><input type="radio" name="direction" value="in" ${v.direction !== 'out' ? 'checked' : ''}>Додати</label><label><input type="radio" name="direction" value="out" ${v.direction === 'out' ? 'checked' : ''}>Зменшити</label></div></div>

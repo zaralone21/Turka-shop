@@ -20,7 +20,8 @@ VIEWS.suppliers = () => {
   const list = UI.f.supCat === NO_SECTION ? base.filter(s => !s.categories.length) : UI.f.supCat ? base.filter(s => s.categories.includes(UI.f.supCat)) : base;
   const chip = (v, label, n) => `<button class="chip ${UI.f.supCat === v ? 'on' : ''}" data-act="sup-cat" data-v="${esc(v)}">${esc(label)} <span class="muted">${n}</span></button>`;
   const noCat = base.filter(s => !s.categories.length).length;
-  const head = `<div class="page-head"><div><p>${d.suppliers.length} ${plural(d.suppliers.length, 'постачальник', 'постачальники', 'постачальників')}</p></div><button class="btn primary hide-m" data-act="add-supplier">+ Додати постачальника</button></div>`;
+  const hid = d.suppliers.filter(s => s.productsHidden).length;
+  const head = `<div class="page-head"><div><p>${d.suppliers.length} ${plural(d.suppliers.length, 'постачальник', 'постачальники', 'постачальників')}${hid ? ` · товари приховано в ${hid}` : ''}</p></div><button class="btn primary hide-m" data-act="add-supplier">+ Додати постачальника</button></div>`;
   if (!d.suppliers.length) return head + emptyState('Тут будуть картки постачальників з контактами, умовами та цінами на товари.', 'add-supplier', 'Додати першого постачальника');
   return head + `
   <div class="toolbar">
@@ -40,7 +41,7 @@ export function supplierCard(s) {
       ${cats.length ? `<div class="chips">${cats.map(c => `<span class="chip">${esc(c)}</span>`).join('')}${s.categories.length > 2 ? `<span class="chip">+${s.categories.length - 2}</span>` : ''}</div>` : ''}</div></div>
     <div class="small muted">${[s.city, s.phone].filter(Boolean).map(esc).join(' · ') || 'Контакти не вказані'}</div>
     ${s.minOrder ? `<div class="small">Мін. замовлення: ${esc(s.minOrder)}</div>` : ''}
-    <div class="card-foot"><span class="small muted">${n} ${plural(n, 'товар', 'товари', 'товарів')}</span><span class="small muted">${s.checkedAt ? `Перевірено ${fmtDate(s.checkedAt)}${age > 90 ? ' <span class="pill warn">давно</span>' : ''}` : '<span class="pill warn">Не перевірено</span>'}</span></div>
+    <div class="card-foot"><span class="small muted">${n} ${plural(n, 'товар', 'товари', 'товарів')}${s.productsHidden ? ' · <span class="pill">приховано</span>' : ''}</span><span class="small muted">${s.checkedAt ? `Перевірено ${fmtDate(s.checkedAt)}${age > 90 ? ' <span class="pill warn">давно</span>' : ''}` : '<span class="pill warn">Не перевірено</span>'}</span></div>
   </article>`;
 }
 export function supplierDetail(s) {
@@ -50,7 +51,8 @@ export function supplierDetail(s) {
   return `
   <div><button class="btn ghost sm" data-act="back-suppliers">← Усі постачальники</button></div>
   <div class="page-head"><div><h2 class="rec-title">${esc(s.name)}</h2><div class="row" style="margin-top:6px">${statusPill(s.status)}${s.categories.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
-    <div class="row"><button class="btn sm" data-act="edit-supplier" data-id="${s.id}">Редагувати</button><button class="btn sm" data-act="supplier-checked" data-id="${s.id}">Перевірено сьогодні</button><button class="btn sm danger hide-m" data-act="del-supplier" data-id="${s.id}">Видалити</button></div></div>
+    <div class="row"><button class="btn sm" data-act="edit-supplier" data-id="${s.id}">Редагувати</button><button class="btn sm" data-act="supplier-checked" data-id="${s.id}">Перевірено сьогодні</button><button class="btn sm ${s.productsHidden ? 'primary' : ''}" data-act="sup-hide-products" data-id="${s.id}" aria-pressed="${!!s.productsHidden}">${s.productsHidden ? 'Показати товари' : 'Приховати товари'}</button><button class="btn sm danger hide-m" data-act="del-supplier" data-id="${s.id}">Видалити</button></div></div>
+  ${s.productsHidden ? `<div class="callout row" style="justify-content:space-between;gap:10px"><span>Товари «${esc(s.name)}» приховані з вибору товару в операціях і закупівлях. У каталозі й залишках вони лишаються.</span><button class="btn sm primary" data-act="sup-hide-products" data-id="${s.id}">Показати товари</button></div>` : ''}
   <div class="grid-2">
     <section class="panel"><h2 style="margin-bottom:10px">Контакти</h2><dl class="kv">
       ${row('Instagram', igLink(s.instagram))}${row('Сайт', ext(s.website))}${row('Телефон', s.phone ? `<a class="num" href="tel:${esc(s.phone.replace(/[^\d+]/g, ''))}">${esc(s.phone)}</a> <button class="btn sm ghost" data-act="copy" data-text="${esc(s.phone)}">Копіювати</button>` : '')}
