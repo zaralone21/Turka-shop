@@ -404,3 +404,4 @@ table.t td.bad { color: var(--danger); }
 .buying-edit .r > .i-calc { grid-column: 1 / -1; margin-top: -2px; min-height: 0; }
 .buying-edit .r > .i-calc:empty { display: none; }
 .i-calc.bad { color: var(--danger); }
+.stock-ro { display: flex; align-items: center; background: var(--surface-2); color: var(--text-muted); }
