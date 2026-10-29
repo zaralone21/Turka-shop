@@ -141,3 +141,14 @@ describe('міграція v4', () => {
     expect(stockLedger(repo.data).products.get('x1').qty).toBe(2);
   });
 });
+
+import { pickableProducts } from '../src/core/supplierSections.js';
+describe('приховані товари постачальника', () => {
+  it('зникають з вибору, крім уже вибраного й закупівлі в цього постачальника', () => {
+    const d = Schema.normalize({ ...Schema.empty(), suppliers: [{ id: 's1', name: 'А', productsHidden: true }, { id: 's2', name: 'Б' }],
+      products: [{ id: 'a', name: 'A1', supplierId: 's1' }, { id: 'b', name: 'B1', supplierId: 's2' }, { id: 'c', name: 'Без' }] });
+    expect(pickableProducts(d).map(p => p.id)).toEqual(['b', 'c']);
+    expect(pickableProducts(d, { keep: ['a'] }).map(p => p.id)).toEqual(['a', 'b', 'c']);
+    expect(pickableProducts(d, { supplierId: 's1' }).map(p => p.id)).toEqual(['a', 'b', 'c']);
+  });
+});
