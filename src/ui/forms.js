@@ -109,6 +109,12 @@ export function productForm(id, presetSupplier, { backToView, section } = {}) {
   const subsOf = c => uniq([...(sections.find(x => x.name === c)?.subs || []), ...D().products.filter(x => x.category === c).map(x => x.subcategory).filter(Boolean)]);
   const ph = { kept: [...(p?.photos || [])], removed: [], pending: [] };
   let deleting = false;
+  // Кількість у наявності: зміна записується коригуванням в історію залишку. Для товару з розмірами/кольорами — у «Товарах в наявності».
+  const stk = p ? stockRows(D()).find(x => x.p.id === p.id) : null, shownQty = stk ? stk.qty : 0;
+  const byVariant = !!(stk && stk.variants.some(x => x.size || x.color));
+  const qtyField = byVariant
+    ? `<div class="field"><span class="lbl">Кількість у наявності</span><div class="input stock-ro">${fmtNum(shownQty)}</div><span class="hint">Залишок ведеться за розмірами й кольорами — змінюйте його у вкладці «Товари в наявності».</span></div>`
+    : F.money('stockQty', 'Кількість у наявності', p ? shownQty : '', { ph: '0', hint: p ? 'Зміна запишеться в історію залишку. Продажі й отримані закупівлі змінюють кількість самі.' : 'Скільки цього товару зараз є. У штуках або парах — як одиниця товару.' });
   formModal({
     title: p ? 'Редагувати товар' : 'Новий товар',
     fields: `${F.text('name', 'Назва', v.name, { req: true, full: true })}
@@ -121,6 +127,7 @@ export function productForm(id, presetSupplier, { backToView, section } = {}) {
       ${F.text('sizes', 'Розміри', v.sizes, { ph: 'Напр.: 36–40, S–XL' })}
       ${F.text('colors', 'Кольори', v.colors, { ph: 'Напр.: чорний, бежевий' })}
       ${priceFields(v)}
+      ${qtyField}
       ${F.area('comment', 'Коментар', v.comment, { rows: 2 })}
       <div class="field full"><span class="lbl">Фото</span><div class="photo-edit" id="photo-edit"></div>
         <span class="hint">До ${MAX_PHOTOS} фото. Великі знімки зменшуються автоматично.</span></div>`,
@@ -135,13 +142,28 @@ export function productForm(id, presetSupplier, { backToView, section } = {}) {
     read: fd => {
       const errors = {}; if (!g(fd, 'name')) errors.name = 'Вкажіть назву.';
       const prices = readPrices(fd, errors);
-      return { errors, values: { name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, supplierSectionId: readSupSection(fd), url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), ...prices, comment: g(fd, 'comment') } };
+      let stockQty = null;
+      if (!byVariant) {
+        const n = parseNum(fd.get('stockQty'));
+        if (Number.isNaN(n) || (isNum(n) && n < 0)) errors.stockQty = 'Кількість — число від 0, наприклад 24.';
+        else stockQty = isNum(n) ? n : p ? shownQty : 0;
+      }
+      return { errors, values: { __stockQty: stockQty, name: g(fd, 'name'), category: g(fd, 'category'), subcategory: g(fd, 'category') ? g(fd, 'subcategory') : '', sku: g(fd, 'sku'), supplierId: g(fd, 'supplierId') || null, supplierSectionId: readSupSection(fd), url: g(fd, 'url'), sizes: g(fd, 'sizes'), colors: g(fd, 'colors'), ...prices, comment: g(fd, 'comment') } };
     },
     onDelete: p ? () => { deleting = true; ACTIONS['del-product']({ dataset: { id: p.id } }); } : null,
     // З перегляду: і «Зберегти», і «Скасувати» повертають до (оновленого) перегляду товару.
     onClose: backToView && p ? () => { if (!deleting && Repo.get('products', p.id)) productView(p.id); } : null,
     save: async vals => {
       const id = p ? p.id : uid();
+      const want = vals.__stockQty; delete vals.__stockQty;
+      // Коригування лише якщо кількість у полі змінили; різниця — від поточного залишку (він міг змінитись, поки форма була відкрита).
+      let move = null;
+      if (isNum(want) && (p ? want !== shownQty : want > 0)) {
+        const now = p ? (stockRows(D()).find(x => x.p.id === p.id)?.qty ?? 0) : 0, delta = Math.round((want - now) * 1e6) / 1e6;
+        if (delta) move = { collection: 'moves', action: 'create', id: uid(), fields: { type: 'adjust', productId: id, qty: Math.abs(delta), direction: delta > 0 ? 'in' : 'out',
+          unitCost: delta > 0 ? Calc.unitCost({ ...(p || {}), ...vals }) : null, reason: p ? 'Зміна кількості в картці товару' : 'Початковий залишок', date: todayISO() } };
+        if (move && p) assertStock(D(), [move]);
+      }
       const btn = document.querySelector('.modal-f [type=submit]'); if (btn && ph.pending.length) { btn.disabled = true; btn.textContent = 'Завантаження фото…'; }
       const added = [];
       let full = false;
@@ -156,6 +178,7 @@ export function productForm(id, presetSupplier, { backToView, section } = {}) {
       ph.pending.forEach(f => URL.revokeObjectURL(f.url));
       vals.photos = [...ph.kept, ...added];
       if (p) { await Repo.update('products', id, vals); toast('Товар збережено'); } else { await Repo.create('products', { ...vals, id }); toast('Товар додано'); }
+      if (move) { await Repo.commit([move]); toast(`У наявності: ${fmtNum(want)} ${unitWord(vals.unit === 'pair' ? 'pair' : 'pcs', want)}`); }
       if (ph.removed.length) deletePhotos(ph.removed);
     },
   });
