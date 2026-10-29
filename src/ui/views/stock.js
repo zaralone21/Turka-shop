@@ -1,4 +1,5 @@
 import { Calc } from '../../core/calc.js';
+import { unitOf, unitWord } from '../../core/cart.js';
 import { Repo } from '../../core/repo.js';
 import { DEFAULT_MIN, MOVE_TYPES, assertStock, markupOf, moveSign, planReceipt, retailFromMarkup, stockLedger, stockRows, stockTotals, variantKey, variantLabel } from '../../core/stock.js';
 import { byText, esc, fmtDate, fmtMoney, fmtNum, isNum, parseNum, plural, signedMoney, signedPct, todayISO, uid } from '../../core/utils.js';
@@ -122,7 +123,7 @@ export function stockDetails(id) {
   const kv = (k, v) => `<div><span>${k}</span><b>${v}</b></div>`;
   const body = `<div class="modal-b stk-detail">
     <div class="stk-d-head"><span class="pl-photo">${p.photos?.length ? photoImg(p.photos[0], '', p.name) : svg('products')}</span><div><h3>${esc(p.name)}</h3><p class="small muted">${[p.sku ? 'арт. ' + esc(p.sku) : '', p.category ? esc(p.category) : ''].filter(Boolean).join(' · ') || 'Без категорії'}</p><p class="small">Постачальник: ${supLinks(r.suppliers, p.id)}</p></div></div>
-    <div class="calc-preview stk-kpi">${kv('Залишок', `${fmtNum(r.qty)} шт`)}${kv('Собівартість / од.', money(r.cost))}${kv('Роздріб', isNum(r.retail) ? fmtMoney(r.retail) : 'Ціну не встановлено')}${kv('Націнка', isNum(r.markup) ? signedPct(r.markup) : '—')}${kv('Прибуток / од.', isNum(r.profit) ? signedMoney(r.profit) : '—')}${kv('Вартість залишку', r.qty > 0 && isNum(r.cost) ? fmtMoney(Math.round(r.qty * r.cost * 100) / 100) : '—')}</div>
+    <div class="calc-preview stk-kpi">${kv('Залишок', `${fmtNum(r.qty)} ${unitWord(unitOf(p), r.qty)}`)}${isNum(p.packQty) && p.packQty > 1 ? kv('В упаковці', `${fmtNum(p.packQty)} ${unitWord(unitOf(p), p.packQty)}`) : ''}${kv('Собівартість / од.', money(r.cost))}${kv('Роздріб', isNum(r.retail) ? fmtMoney(r.retail) : 'Ціну не встановлено')}${kv('Націнка', isNum(r.markup) ? signedPct(r.markup) : '—')}${kv('Прибуток / од.', isNum(r.profit) ? signedMoney(r.profit) : '—')}${kv('Вартість залишку', r.qty > 0 && isNum(r.cost) ? fmtMoney(Math.round(r.qty * r.cost * 100) / 100) : '—')}</div>
     ${costMoved(r) ? `<div class="callout warn">Собівартість змінилась після встановлення ціни: була ${fmtMoney(p.retailCostBase)}, зараз ${fmtMoney(r.cost)}. Роздрібну ціну не змінено. <button type="button" class="btn sm" data-d-price>Перевірити ціну</button></div>` : ''}
     ${r.variants.some(v => v.size || v.color) ? `<h4 class="pv-sub">Розміри й кольори</h4><div class="stk-vars big">${r.variants.map(v => `<span class="stk-var ${v.qty <= 0 ? 'zero' : ''}">${esc(variantLabel(v) || 'Без розміру')} <b>${fmtNum(v.qty)}</b></span>`).join('')}</div>` : ''}
     <h4 class="pv-sub">Партії <span class="muted small">${batches.length}</span></h4>
