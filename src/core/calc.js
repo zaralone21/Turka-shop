@@ -3,6 +3,9 @@ import { fmtPct, isNum, parseNum } from './utils.js';
 /** Вартість позиції в копійках (з поправкою на похибку дробових чисел). */
 const lineCents = i => Math.round(Number((i.qty * i.unitPrice * 100).toFixed(6)));
 
+/** Округлення до копійок без похибки дробових чисел. */
+const r2 = x => Math.round(Number((x * 100).toFixed(6))) / 100;
+
 /* =====================================================================
    4. РОЗРАХУНКИ (чисті функції, без доступу до інтерфейсу)
    ===================================================================== */
@@ -23,6 +26,26 @@ export const Calc = {
     const unitPrice = isNum(price) ? (priceFor === 'pack' ? price / per : price) : null;
     const sum = isNum(price) && isNum(packs) ? Math.round((priceFor === 'pack' ? packs * price : qty * price) * 100) / 100 : null;
     return { qty, unitPrice, sum, packQty: per };
+  },
+  /**
+   * Економіка однієї пачки (до витрат магазину). Знижка постачальника тут не застосовується: purchasePrice — вже фактична ціна.
+   * Ціна «за пачку» не множиться на кількість: вартість пачки = сама ціна, ціна одиниці = ціна ÷ кількість.
+   * cost (необов’язково) — фактична собівартість одиниці, напр. середня в залишку після знижки; тоді вона замінює ціну з картки.
+   * Кожне значення — null, якщо для нього бракує даних. 40 ₴ × 12, роздріб 70 ₴ → 480 / 840 / 360 / 30.
+   */
+  packEconomics({ priceType, purchasePrice, packQty, retailPrice, cost }) {
+    const okN = v => isNum(v) && v >= 0;
+    const n = isNum(packQty) && Number.isInteger(packQty) && packQty >= 1 ? packQty : null;
+    const own = okN(cost);
+    const price = own ? cost : okN(purchasePrice) ? purchasePrice : null;
+    const byPack = !own && priceType === 'pack';
+    const unitCost = price === null ? null : byPack ? (n ? price / n : null) : price;
+    const packCost = price === null || !n ? null : byPack ? price : r2(price * n);
+    const retail = okN(retailPrice) ? retailPrice : null;
+    const revenue = retail !== null && n ? r2(retail * n) : null;
+    const packProfit = packCost !== null && revenue !== null ? r2(revenue - packCost) : null;
+    const unitProfit = unitCost !== null && retail !== null ? r2(retail - unitCost) : null;
+    return { packQty: n, unitCost: unitCost === null ? null : r2(unitCost), packCost: packCost === null ? null : r2(packCost), revenue, packProfit, unitProfit };
   },
   /** Націнка = (роздрібна − закупівельна) / закупівельна × 100 */
   /** Різниця на одиниці = роздрібна − закупівельна за одиницю (без інших витрат). */
