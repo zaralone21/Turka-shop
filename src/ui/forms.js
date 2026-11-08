@@ -282,6 +282,12 @@ export function productView(id, start = 0) {
       ${p.priceType === 'pack' ? row('Ціна одиниці', isNum(cost) ? fmtMoney(cost) : none) : ''}
       ${row('Роздрібна ціна', isNum(retail) ? fmtMoney(retail) : none)}
       ${calc}
+    </dl>
+    <div class="pack-econ pv-econ">${packEconHtml(Calc.packEconomics(p))}${(() => {
+      const f = Calc.packEconomics({ ...p, cost: stk.tracked ? stk.cost : null }), c = Calc.packEconomics(p);
+      return stk.tracked && isNum(stk.cost) && isNum(c.unitCost) && Math.abs(stk.cost - c.unitCost) >= 0.01 && isNum(f.packProfit) ? `<p class="pe-fact">За фактичною собівартістю в залишку (${fmtMoney(stk.cost)} / од., після знижки постачальника): прибуток із пачки <b class="${f.packProfit < 0 ? 'bad' : ''}">${money2(f.packProfit)}</b>, з одиниці <b class="${f.unitProfit < 0 ? 'bad' : ''}">${money2(f.unitProfit)}</b>.</p>` : '';
+    })()}</div>
+    <dl class="kv pv-kv">
       ${row('Ціна актуальна на', p.priceDate ? fmtDate(p.priceDate) : none)}
     </dl>${missing}</section>
   </div>
@@ -337,14 +343,25 @@ export function productSpecsForm(id, back) {
     save: async vals => { await saveProduct(id, vals); toast('Характеристики збережено'); },
   });
 }
+/* Пачка: закупівля, виторг і валовий прибуток. Для нестачі даних — «Заповніть дані», не нуль. */
+const money2Fmt = new Intl.NumberFormat('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money2 = n => (n < 0 ? '−' : '') + money2Fmt.format(Math.abs(n)) + ' грн';
+const PACK_ECON_NOTE = 'До віднімання витрат магазину: оренди, податків, комісій та інших витрат';
+function packEconHtml(e, { title = 'Розрахунок пачки', note = '' } = {}) {
+  const cell = (k, v, profit) => `<div class="pe-c${profit ? ' pe-profit' : ''}"><span>${k}</span>${isNum(v) ? `<b class="${v < 0 ? 'bad' : ''}">${money2(v)}</b>` : '<b class="pe-empty">Заповніть дані</b>'}</div>`;
+  return `<div class="pe-h"><b>${title}</b>${note ? `<span>${note}</span>` : ''}</div>
+    <div class="pe-grid">${cell('Закупівля пачки', e.packCost)}${cell('Продаж усієї пачки', e.revenue)}${cell('Валовий прибуток із пачки', e.packProfit, true)}${cell('Валовий прибуток з одиниці', e.unitProfit, true)}</div>
+    <p class="pe-note">${PACK_ECON_NOTE}</p>`;
+}
 /* Ціни у формі: перемикач одиниця/упаковка і попередній розрахунок. */
 function priceFields(v) {
   return `${F.select('unit', 'Одиниця товару', v.unit === 'pair' ? 'pair' : 'pcs', [['pcs', 'штука'], ['pair', 'пара']], { hint: 'У ній рахуються кількість і ціна за одиницю.' })}
       <div class="field"><span class="lbl">Ціна закупівлі вказана</span><div class="seg" role="radiogroup"><label><input type="radio" name="priceType" value="unit" ${v.priceType !== 'pack' ? 'checked' : ''}>за одиницю</label><label><input type="radio" name="priceType" value="pack" ${v.priceType === 'pack' ? 'checked' : ''}>за упаковку</label></div></div>
-      ${F.money('packQty', 'Кількість одиниць в упаковці', isNum(v.packQty) ? v.packQty : v.priceType === 'pack' ? '' : 1, { req: true, hint: '<span id="pack-hint">Ціле число від 1. Напр.: упаковка трусів — 6 шт, шкарпеток — 12 пар.</span>' })}
-      ${F.money('purchasePrice', `Ціна закупівлі <span id="price-for">${v.priceType === 'pack' ? 'за упаковку' : 'за одиницю'}</span>, ₴`, v.purchasePrice, { req: true })}
-      ${F.money('retailPrice', 'Планова роздрібна ціна за одиницю, ₴', v.retailPrice)}
+      ${F.money('packQty', 'Кількість одиниць у пачці', isNum(v.packQty) ? v.packQty : v.priceType === 'pack' ? '' : 1, { req: true, hint: '<span id="pack-hint">Ціле число від 1. Напр.: пачка трусів — 6 шт, шкарпеток — 12 пар. Це не залишок на складі.</span>' })}
+      ${F.money('purchasePrice', `Закупівельна ціна <span id="price-for">${v.priceType === 'pack' ? 'за упаковку' : 'за одиницю'}</span>, грн`, v.purchasePrice, { req: true, hint: 'Фактична ціна, яку ви платите, вже після знижки постачальника.' })}
+      ${F.money('retailPrice', 'Роздрібна ціна за одиницю, грн', v.retailPrice)}
       ${F.date('priceDate', 'Ціна актуальна на', v.priceDate)}
+      <div class="full pack-econ" id="pack-econ" aria-live="polite"></div>
       <div class="full calc-preview" id="calc-preview"></div>`;
 }
 function wirePriceFields(m) {
@@ -353,8 +370,9 @@ function wirePriceFields(m) {
     const type = form.querySelector('[name=priceType]:checked').value;
     const unit = form.unit.value === 'pair' ? 'pair' : 'pcs', n = parseNum(form.packQty.value);
     m.querySelector('#price-for').textContent = type === 'pack' ? 'за упаковку' : unit === 'pair' ? 'за пару' : 'за штуку';
-    m.querySelector('#pack-hint').textContent = isNum(n) && Number.isInteger(n) && n >= 1 ? `В упаковці: ${fmtNum(n)} ${unitWord(unit, n)}.${type === 'pack' && n > 1 ? ` Ціна однієї ${unit === 'pair' ? 'пари' : 'штуки'} рахується автоматично.` : ''}` : 'Ціле число від 1. Напр.: упаковка трусів — 6 шт, шкарпеток — 12 пар.';
+    m.querySelector('#pack-hint').textContent = isNum(n) && Number.isInteger(n) && n >= 1 ? `У пачці: ${fmtNum(n)} ${unitWord(unit, n)}.${type === 'pack' && n > 1 ? ` Ціна однієї ${unit === 'pair' ? 'пари' : 'штуки'} рахується автоматично.` : ''} Це не залишок на складі.` : 'Ціле число від 1. Напр.: пачка трусів — 6 шт, шкарпеток — 12 пар. Це не залишок на складі.';
     const tmp = { priceType: type, purchasePrice: parseNum(form.purchasePrice.value), packQty: n };
+    m.querySelector('#pack-econ').innerHTML = packEconHtml(Calc.packEconomics({ ...tmp, retailPrice: parseNum(form.retailPrice.value) }));
     const c = Calc.unitCost(tmp), r = parseNum(form.retailPrice.value);
     m.querySelector('#calc-preview').innerHTML = `<div><span>Ціна ${unit === 'pair' ? 'пари' : 'одиниці'}</span><b>${fmtMoney(c)}</b></div><div><span>Різниця / од.</span><b>${isNum(Calc.diff(c, r)) ? signedMoney(Calc.diff(c, r)) : '—'}</b></div><div><span>Націнка</span><b>${fmtPct(Calc.markup(c, r))}</b></div><div><span>Маржа</span><b>${fmtPct(Calc.margin(c, r))}</b></div>`;
   };
